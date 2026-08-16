@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { DAYS, TIME_SLOTS } from '../utils/constants';
 import CourseCard from './CourseCard';
 
@@ -74,14 +74,16 @@ export default function WeeklySchedule({ courses = [], onCourseClick, onAddCours
 
           {/* Ders kartları */}
           {courses.map((course) => (
-            <div 
-              key={course.id} 
+            <button
+              key={course.id}
+              type="button"
               className="schedule-course"
-              style={getGridArea(course)}
+              style={{ ...getGridArea(course), textAlign: 'left', border: 'none', padding: 0, background: 'transparent' }}
               onClick={() => onCourseClick(course)}
+              aria-label={`${course.name} dersini görüntüle`}
             >
               <CourseCard course={course} />
-            </div>
+            </button>
           ))}
         </div>
       )}

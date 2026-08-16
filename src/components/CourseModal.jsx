@@ -75,7 +75,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = 'Ders adı zorunludur';
     if (!formData.day) newErrors.day = 'Gün seçimi zorunludur';
-    
+    if (formData.endTime <= formData.startTime) newErrors.endTime = 'Bitiş saati başlangıçtan sonra olmalıdır';
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -138,24 +139,31 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Başlangıç</label>
-              <input 
-                type="time" 
-                name="startTime" 
-                className="glass-input" 
-                value={formData.startTime} 
+              <select
+                name="startTime"
+                className="glass-input"
+                value={formData.startTime}
                 onChange={handleChange}
-              />
+              >
+                {TIME_SLOTS.map(time => (
+                  <option key={time} value={time}>{time}</option>
+                ))}
+              </select>
             </div>
-            
+
             <div className="form-group">
               <label className="form-label">Bitiş</label>
-              <input 
-                type="time" 
-                name="endTime" 
-                className="glass-input" 
-                value={formData.endTime} 
+              <select
+                name="endTime"
+                className="glass-input"
+                value={formData.endTime}
                 onChange={handleChange}
-              />
+              >
+                {TIME_SLOTS.map(time => (
+                  <option key={time} value={time}>{time}</option>
+                ))}
+              </select>
+              {errors.endTime && <div className="text-xs" style={{ color: 'var(--accent-red)', marginTop: '4px' }}>{errors.endTime}</div>}
             </div>
           </div>
 
@@ -175,9 +183,12 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
             <label className="form-label">Renk</label>
             <div className="flex" style={{ gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
               {COURSE_COLORS.map(color => (
-                <div 
+                <button
                   key={color}
+                  type="button"
                   onClick={() => setFormData(prev => ({ ...prev, color }))}
+                  aria-label={`Renk seç: ${color}`}
+                  aria-pressed={formData.color === color}
                   style={{
                     width: '32px',
                     height: '32px',
@@ -186,7 +197,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
                     cursor: 'pointer',
                     border: formData.color === color ? '2px solid white' : '2px solid transparent',
                     boxShadow: formData.color === color ? '0 0 10px rgba(255,255,255,0.5)' : 'none',
-                    transition: 'all var(--transition-fast)'
+                    transition: 'all var(--transition-fast)',
+                    padding: 0
                   }}
                 />
               ))}

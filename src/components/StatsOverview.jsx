@@ -62,7 +62,7 @@ const StatsOverview = ({ courses, userId }) => {
 
 /** Tek bir ders için istatistik kartı */
 const CourseStatCard = ({ course, userId }) => {
-  const { attendance, stats } = useAttendance(userId, course.id, SEMESTER_WEEKS)
+  const { stats } = useAttendance(userId, course.id, SEMESTER_WEEKS)
   const { homework } = useHomework(userId, course.id)
 
   const completedHw = homework.filter(hw => hw.isCompleted).length

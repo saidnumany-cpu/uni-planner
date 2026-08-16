@@ -44,9 +44,11 @@ const Header = () => {
         <div className="flex" style={{ gap: 'var(--space-sm)', alignItems: 'center' }}>
           <div className="flex" style={{ gap: 'var(--space-sm)', alignItems: 'center' }}>
             {/* Desktop only display name */}
-            <span className="text-sm" style={{ display: 'none' }} /* Would use media query or inline check for mobile */>
-              {user.displayName}
-            </span>
+            {user.displayName && (
+              <span className="text-sm header-username">
+                {user.displayName}
+              </span>
+            )}
             {user.photoURL ? (
               <img 
                 src={user.photoURL} 

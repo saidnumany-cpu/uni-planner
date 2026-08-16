@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useHomework from '../hooks/useHomework';
 import HomeworkModal from './HomeworkModal';
+import { getDueDateStatus } from '../utils/helpers';
 
 /**
  * Ders ödevleri listesi
@@ -35,20 +36,15 @@ export default function HomeworkList({ userId, courseId }) {
   };
 
   const getUrgencyBadge = (dateString) => {
-    if (!dateString) return null;
-    const dueDate = new Date(dateString);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const diffTime = Math.abs(dueDate - today);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-    
-    if (dueDate < today) {
+    const status = getDueDateStatus(dateString);
+    if (!status) return null;
+
+    if (status.isOverdue) {
       return <span className="badge badge-danger">Süresi Geçti</span>;
-    } else if (diffDays <= 3) {
+    } else if (status.isUrgent) {
       return <span className="badge badge-warning">Yaklaşıyor</span>;
     } else {
-      return <span className="badge badge-success">{new Date(dateString).toLocaleDateString('tr-TR')}</span>;
+      return <span className="badge badge-success">{status.due.toLocaleDateString('tr-TR')}</span>;
     }
   };
 

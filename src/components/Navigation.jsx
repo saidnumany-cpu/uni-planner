@@ -9,8 +9,8 @@ import React from 'react';
 const Navigation = ({ activeTab, onTabChange }) => {
   const tabs = [
     { id: 'schedule', label: 'Program', icon: '📅' },
-    { id: 'assignments', label: 'Ödevler', icon: '📝' },
-    { id: 'summary', label: 'Özet', icon: '📊' }
+    { id: 'homework', label: 'Ödevler', icon: '📝' },
+    { id: 'stats', label: 'Özet', icon: '📊' }
   ];
 
   return (

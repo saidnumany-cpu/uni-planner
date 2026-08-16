@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useNotes from '../hooks/useNotes';
-import { SEMESTER_WEEKS, WEEK_LABELS } from '../utils/constants';
+import { SEMESTER_WEEKS } from '../utils/constants';
 
 /**
  * Ders notları düzenleyicisi
@@ -15,6 +15,7 @@ export default function WeeklyNotes({ userId, courseId }) {
   const [saveMessage, setSaveMessage] = useState('');
   
   const timerRef = useRef(null);
+  const pendingRef = useRef(null);
 
   // Hafta değiştiğinde veya veriler yüklendiğinde notu getir
   useEffect(() => {
@@ -25,11 +26,26 @@ export default function WeeklyNotes({ userId, courseId }) {
     }
   }, [activeWeek, loading, getNote]);
 
+  // Bileşen kapanırken (örn. başka bir sekmeye geçilirken) bekleyen kaydı hemen gönder
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        if (pendingRef.current) {
+          const { week, value } = pendingRef.current;
+          saveNote(week, value).catch(() => {});
+        }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleChange = (e) => {
     const newContent = e.target.value;
     setContent(newContent);
     setSaveMessage('Kaydediliyor...');
     setIsSaving(true);
+    pendingRef.current = { week: activeWeek, value: newContent };
 
     // Debounce: 2 saniye hareketsizlik sonrası kaydet
     if (timerRef.current) {
@@ -44,6 +60,7 @@ export default function WeeklyNotes({ userId, courseId }) {
         setSaveMessage('Kayıt hatası!');
       } finally {
         setIsSaving(false);
+        pendingRef.current = null;
       }
     }, 2000);
   };
@@ -57,6 +74,7 @@ export default function WeeklyNotes({ userId, courseId }) {
         await saveNote(activeWeek, content);
         setSaveMessage('Kaydedildi ✓');
         setIsSaving(false);
+        pendingRef.current = null;
       } catch (err) {
         setSaveMessage('Kayıt hatası!');
       }
