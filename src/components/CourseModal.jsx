@@ -9,8 +9,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
     name: '',
     instructor: '',
     day: DAYS[0],
-    startTime: TIME_SLOTS[0],
-    endTime: TIME_SLOTS[1],
+    startTime: '09:00',
+    endTime: '10:00',
     location: '',
     color: COURSE_COLORS[0]
   });
@@ -23,8 +23,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
         name: course.name || '',
         instructor: course.instructor || '',
         day: course.day || DAYS[0],
-        startTime: course.startTime || TIME_SLOTS[0],
-        endTime: course.endTime || TIME_SLOTS[1],
+        startTime: course.startTime || '09:00',
+        endTime: course.endTime || '10:00',
         location: course.location || '',
         color: course.color || COURSE_COLORS[0]
       });
@@ -33,8 +33,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
         name: '',
         instructor: '',
         day: DAYS[0],
-        startTime: TIME_SLOTS[0],
-        endTime: TIME_SLOTS[1],
+        startTime: '09:00',
+        endTime: '10:00',
         location: '',
         color: COURSE_COLORS[0]
       });
@@ -138,20 +138,24 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Başlangıç</label>
-              <select name="startTime" className="glass-input" value={formData.startTime} onChange={handleChange}>
-                {TIME_SLOTS.map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
+              <input 
+                type="time" 
+                name="startTime" 
+                className="glass-input" 
+                value={formData.startTime} 
+                onChange={handleChange}
+              />
             </div>
             
             <div className="form-group">
               <label className="form-label">Bitiş</label>
-              <select name="endTime" className="glass-input" value={formData.endTime} onChange={handleChange}>
-                {TIME_SLOTS.map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
+              <input 
+                type="time" 
+                name="endTime" 
+                className="glass-input" 
+                value={formData.endTime} 
+                onChange={handleChange}
+              />
             </div>
           </div>
 

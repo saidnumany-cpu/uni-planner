@@ -91,13 +91,14 @@ export default function WeeklySchedule({ courses = [], onCourseClick, onAddCours
         className="glass-button-primary glass-button-icon flex-center shadow-lg"
         style={{
           position: 'fixed',
-          bottom: '100px', // nav bar'ın üzerinde
+          bottom: '120px',
           right: '24px',
           width: '56px',
           height: '56px',
           borderRadius: '50%',
           fontSize: '24px',
-          zIndex: 100
+          zIndex: 50,
+          boxShadow: '0 6px 24px rgba(124, 58, 237, 0.4)'
         }}
         onClick={onAddCourse}
       >
