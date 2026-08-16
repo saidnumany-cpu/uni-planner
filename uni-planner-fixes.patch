@@ -1,0 +1,371 @@
+diff --git a/src/components/CourseModal.jsx b/src/components/CourseModal.jsx
+index 6143cbd..521e63f 100644
+--- a/src/components/CourseModal.jsx
++++ b/src/components/CourseModal.jsx
+@@ -75,7 +75,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
+     const newErrors = {};
+     if (!formData.name.trim()) newErrors.name = 'Ders adı zorunludur';
+     if (!formData.day) newErrors.day = 'Gün seçimi zorunludur';
+-    
++    if (formData.endTime <= formData.startTime) newErrors.endTime = 'Bitiş saati başlangıçtan sonra olmalıdır';
++
+     if (Object.keys(newErrors).length > 0) {
+       setErrors(newErrors);
+       return;
+@@ -138,24 +139,31 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
+           <div className="form-row">
+             <div className="form-group">
+               <label className="form-label">Başlangıç</label>
+-              <input 
+-                type="time" 
+-                name="startTime" 
+-                className="glass-input" 
+-                value={formData.startTime} 
++              <select
++                name="startTime"
++                className="glass-input"
++                value={formData.startTime}
+                 onChange={handleChange}
+-              />
++              >
++                {TIME_SLOTS.map(time => (
++                  <option key={time} value={time}>{time}</option>
++                ))}
++              </select>
+             </div>
+-            
++
+             <div className="form-group">
+               <label className="form-label">Bitiş</label>
+-              <input 
+-                type="time" 
+-                name="endTime" 
+-                className="glass-input" 
+-                value={formData.endTime} 
++              <select
++                name="endTime"
++                className="glass-input"
++                value={formData.endTime}
+                 onChange={handleChange}
+-              />
++              >
++                {TIME_SLOTS.map(time => (
++                  <option key={time} value={time}>{time}</option>
++                ))}
++              </select>
++              {errors.endTime && <div className="text-xs" style={{ color: 'var(--accent-red)', marginTop: '4px' }}>{errors.endTime}</div>}
+             </div>
+           </div>
+ 
+@@ -175,9 +183,12 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
+             <label className="form-label">Renk</label>
+             <div className="flex" style={{ gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
+               {COURSE_COLORS.map(color => (
+-                <div 
++                <button
+                   key={color}
++                  type="button"
+                   onClick={() => setFormData(prev => ({ ...prev, color }))}
++                  aria-label={`Renk seç: ${color}`}
++                  aria-pressed={formData.color === color}
+                   style={{
+                     width: '32px',
+                     height: '32px',
+@@ -186,7 +197,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
+                     cursor: 'pointer',
+                     border: formData.color === color ? '2px solid white' : '2px solid transparent',
+                     boxShadow: formData.color === color ? '0 0 10px rgba(255,255,255,0.5)' : 'none',
+-                    transition: 'all var(--transition-fast)'
++                    transition: 'all var(--transition-fast)',
++                    padding: 0
+                   }}
+                 />
+               ))}
+diff --git a/src/components/Header.jsx b/src/components/Header.jsx
+index 4c3c195..d7d9d96 100644
+--- a/src/components/Header.jsx
++++ b/src/components/Header.jsx
+@@ -44,9 +44,11 @@ const Header = () => {
+         <div className="flex" style={{ gap: 'var(--space-sm)', alignItems: 'center' }}>
+           <div className="flex" style={{ gap: 'var(--space-sm)', alignItems: 'center' }}>
+             {/* Desktop only display name */}
+-            <span className="text-sm" style={{ display: 'none' }} /* Would use media query or inline check for mobile */>
+-              {user.displayName}
+-            </span>
++            {user.displayName && (
++              <span className="text-sm header-username">
++                {user.displayName}
++              </span>
++            )}
+             {user.photoURL ? (
+               <img 
+                 src={user.photoURL} 
+diff --git a/src/components/HomeworkList.jsx b/src/components/HomeworkList.jsx
+index ec43c95..190e270 100644
+--- a/src/components/HomeworkList.jsx
++++ b/src/components/HomeworkList.jsx
+@@ -1,6 +1,7 @@
+ import React, { useState } from 'react';
+ import useHomework from '../hooks/useHomework';
+ import HomeworkModal from './HomeworkModal';
++import { getDueDateStatus } from '../utils/helpers';
+ 
+ /**
+  * Ders ödevleri listesi
+@@ -35,20 +36,15 @@ export default function HomeworkList({ userId, courseId }) {
+   };
+ 
+   const getUrgencyBadge = (dateString) => {
+-    if (!dateString) return null;
+-    const dueDate = new Date(dateString);
+-    const today = new Date();
+-    today.setHours(0, 0, 0, 0);
+-    
+-    const diffTime = Math.abs(dueDate - today);
+-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+-    
+-    if (dueDate < today) {
++    const status = getDueDateStatus(dateString);
++    if (!status) return null;
++
++    if (status.isOverdue) {
+       return <span className="badge badge-danger">Süresi Geçti</span>;
+-    } else if (diffDays <= 3) {
++    } else if (status.isUrgent) {
+       return <span className="badge badge-warning">Yaklaşıyor</span>;
+     } else {
+-      return <span className="badge badge-success">{new Date(dateString).toLocaleDateString('tr-TR')}</span>;
++      return <span className="badge badge-success">{status.due.toLocaleDateString('tr-TR')}</span>;
+     }
+   };
+ 
+diff --git a/src/components/HomeworkOverview.jsx b/src/components/HomeworkOverview.jsx
+index cbb8a78..42e7f03 100644
+--- a/src/components/HomeworkOverview.jsx
++++ b/src/components/HomeworkOverview.jsx
+@@ -2,6 +2,7 @@ import { useState } from 'react'
+ import { useHomework } from '../hooks/useHomework'
+ import HomeworkModal from './HomeworkModal'
+ import EmptyState from './EmptyState'
++import { getDueDateStatus } from '../utils/helpers'
+ 
+ /**
+  * Tüm dersler için ödev genel görünümü
+@@ -46,15 +47,13 @@ const CourseHomeworkSection = ({ course, userId }) => {
+   if (loading) return null
+ 
+   const getDueDateLabel = (dueDate) => {
+-    if (!dueDate) return null
+-    const due = dueDate.toDate ? dueDate.toDate() : new Date(dueDate)
+-    const now = new Date()
+-    const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
+-    
+-    const dateStr = due.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
+-    
+-    if (diffDays < 0) return { text: `${dateStr} (Geçti)`, className: 'badge badge-danger' }
+-    if (diffDays <= 3) return { text: `${dateStr} (${diffDays} gün)`, className: 'badge badge-warning' }
++    const status = getDueDateStatus(dueDate)
++    if (!status) return null
++
++    const dateStr = status.due.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
++
++    if (status.isOverdue) return { text: `${dateStr} (Geçti)`, className: 'badge badge-danger' }
++    if (status.isUrgent) return { text: `${dateStr} (${status.diffDays} gün)`, className: 'badge badge-warning' }
+     return { text: dateStr, className: 'badge' }
+   }
+ 
+diff --git a/src/components/Navigation.jsx b/src/components/Navigation.jsx
+index cd3e930..f22bfb0 100644
+--- a/src/components/Navigation.jsx
++++ b/src/components/Navigation.jsx
+@@ -9,8 +9,8 @@ import React from 'react';
+ const Navigation = ({ activeTab, onTabChange }) => {
+   const tabs = [
+     { id: 'schedule', label: 'Program', icon: '📅' },
+-    { id: 'assignments', label: 'Ödevler', icon: '📝' },
+-    { id: 'summary', label: 'Özet', icon: '📊' }
++    { id: 'homework', label: 'Ödevler', icon: '📝' },
++    { id: 'stats', label: 'Özet', icon: '📊' }
+   ];
+ 
+   return (
+diff --git a/src/components/StatsOverview.jsx b/src/components/StatsOverview.jsx
+index efa844b..dd89034 100644
+--- a/src/components/StatsOverview.jsx
++++ b/src/components/StatsOverview.jsx
+@@ -62,7 +62,7 @@ const StatsOverview = ({ courses, userId }) => {
+ 
+ /** Tek bir ders için istatistik kartı */
+ const CourseStatCard = ({ course, userId }) => {
+-  const { attendance, stats } = useAttendance(userId, course.id, SEMESTER_WEEKS)
++  const { stats } = useAttendance(userId, course.id, SEMESTER_WEEKS)
+   const { homework } = useHomework(userId, course.id)
+ 
+   const completedHw = homework.filter(hw => hw.isCompleted).length
+diff --git a/src/components/WeeklyNotes.jsx b/src/components/WeeklyNotes.jsx
+index eba0194..3e08496 100644
+--- a/src/components/WeeklyNotes.jsx
++++ b/src/components/WeeklyNotes.jsx
+@@ -1,6 +1,6 @@
+ import React, { useState, useEffect, useRef } from 'react';
+ import useNotes from '../hooks/useNotes';
+-import { SEMESTER_WEEKS, WEEK_LABELS } from '../utils/constants';
++import { SEMESTER_WEEKS } from '../utils/constants';
+ 
+ /**
+  * Ders notları düzenleyicisi
+@@ -15,6 +15,7 @@ export default function WeeklyNotes({ userId, courseId }) {
+   const [saveMessage, setSaveMessage] = useState('');
+   
+   const timerRef = useRef(null);
++  const pendingRef = useRef(null);
+ 
+   // Hafta değiştiğinde veya veriler yüklendiğinde notu getir
+   useEffect(() => {
+@@ -25,11 +26,26 @@ export default function WeeklyNotes({ userId, courseId }) {
+     }
+   }, [activeWeek, loading, getNote]);
+ 
++  // Bileşen kapanırken (örn. başka bir sekmeye geçilirken) bekleyen kaydı hemen gönder
++  useEffect(() => {
++    return () => {
++      if (timerRef.current) {
++        clearTimeout(timerRef.current);
++        if (pendingRef.current) {
++          const { week, value } = pendingRef.current;
++          saveNote(week, value).catch(() => {});
++        }
++      }
++    };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
+   const handleChange = (e) => {
+     const newContent = e.target.value;
+     setContent(newContent);
+     setSaveMessage('Kaydediliyor...');
+     setIsSaving(true);
++    pendingRef.current = { week: activeWeek, value: newContent };
+ 
+     // Debounce: 2 saniye hareketsizlik sonrası kaydet
+     if (timerRef.current) {
+@@ -44,6 +60,7 @@ export default function WeeklyNotes({ userId, courseId }) {
+         setSaveMessage('Kayıt hatası!');
+       } finally {
+         setIsSaving(false);
++        pendingRef.current = null;
+       }
+     }, 2000);
+   };
+@@ -57,6 +74,7 @@ export default function WeeklyNotes({ userId, courseId }) {
+         await saveNote(activeWeek, content);
+         setSaveMessage('Kaydedildi ✓');
+         setIsSaving(false);
++        pendingRef.current = null;
+       } catch (err) {
+         setSaveMessage('Kayıt hatası!');
+       }
+diff --git a/src/components/WeeklySchedule.jsx b/src/components/WeeklySchedule.jsx
+index 868d020..1098714 100644
+--- a/src/components/WeeklySchedule.jsx
++++ b/src/components/WeeklySchedule.jsx
+@@ -1,4 +1,4 @@
+-import React, { useState, useEffect } from 'react';
++import React from 'react';
+ import { DAYS, TIME_SLOTS } from '../utils/constants';
+ import CourseCard from './CourseCard';
+ 
+@@ -74,14 +74,16 @@ export default function WeeklySchedule({ courses = [], onCourseClick, onAddCours
+ 
+           {/* Ders kartları */}
+           {courses.map((course) => (
+-            <div 
+-              key={course.id} 
++            <button
++              key={course.id}
++              type="button"
+               className="schedule-course"
+-              style={getGridArea(course)}
++              style={{ ...getGridArea(course), textAlign: 'left', border: 'none', padding: 0, background: 'transparent' }}
+               onClick={() => onCourseClick(course)}
++              aria-label={`${course.name} dersini görüntüle`}
+             >
+               <CourseCard course={course} />
+-            </div>
++            </button>
+           ))}
+         </div>
+       )}
+diff --git a/src/index.css b/src/index.css
+index f97394b..d08e545 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -730,6 +730,16 @@ h3 {
+   }
+ }
+ 
++.header-username {
++  display: none;
++}
++
++@media (min-width: 640px) {
++  .header-username {
++    display: inline;
++  }
++}
++
+ /* ==========================================================================
+    18. Form elements
+    ========================================================================== */
+diff --git a/src/utils/helpers.js b/src/utils/helpers.js
+index fbab489..a0a5330 100644
+--- a/src/utils/helpers.js
++++ b/src/utils/helpers.js
+@@ -70,3 +70,47 @@ export const formatDate = (timestamp) => {
+   const year = date.getFullYear();
+   return `${day}.${month}.${year}`;
+ };
++
++/**
++ * 'YYYY-MM-DD' formatındaki bir tarih stringini YEREL saat diliminde
++ * bir Date objesine çevirir. `new Date('YYYY-MM-DD')` UTC gece yarısı
++ * olarak yorumlanır ve negatif UTC farkına sahip saat dilimlerinde
++ * tarihi bir gün geriye kaydırabilir; bu fonksiyon o kaymayı önler.
++ * @param {string|Object|Date} value - Tarih stringi, Firestore Timestamp veya Date
++ * @returns {Date|null}
++ */
++export const parseLocalDate = (value) => {
++  if (!value) return null;
++  if (value?.toDate) return value.toDate();
++  if (value instanceof Date) return value;
++
++  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
++  if (!match) return new Date(value);
++
++  const [, year, month, day] = match;
++  return new Date(Number(year), Number(month) - 1, Number(day));
++};
++
++/**
++ * Bir son teslim tarihinin bugüne göre durumunu hesaplar (süresi geçti /
++ * yaklaşıyor / normal). Ödev listelerindeki rozet mantığı için ortak kaynak.
++ * @param {string|Object|Date} dueDateValue
++ * @returns {{ due: Date, diffDays: number, isOverdue: boolean, isUrgent: boolean } | null}
++ */
++export const getDueDateStatus = (dueDateValue) => {
++  const due = parseLocalDate(dueDateValue);
++  if (!due) return null;
++
++  due.setHours(0, 0, 0, 0);
++  const today = new Date();
++  today.setHours(0, 0, 0, 0);
++
++  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
++
++  return {
++    due,
++    diffDays,
++    isOverdue: diffDays < 0,
++    isUrgent: diffDays >= 0 && diffDays <= 3
++  };
++};
