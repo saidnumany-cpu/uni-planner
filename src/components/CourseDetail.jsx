@@ -31,7 +31,7 @@ export default function CourseDetail({ course, userId, onBack, onEditCourse }) {
       >
         <div className="flex-between">
           <h2>{course.name}</h2>
-          <button className="glass-button glass-button-icon" onClick={() => onEditCourse(course)}>
+          <button className="glass-button glass-button-icon" onClick={() => onEditCourse(course)} aria-label="Dersi düzenle">
             ✏️
           </button>
         </div>

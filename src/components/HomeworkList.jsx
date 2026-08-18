@@ -90,7 +90,13 @@ export default function HomeworkList({ userId, courseId }) {
                   </div>
                   <button 
                     className="glass-button-icon text-red-400 hover:text-red-300 ml-2 pt-1" 
-                    onClick={(e) => { e.stopPropagation(); deleteHomework(hw.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
+                        deleteHomework(hw.id);
+                      }
+                    }}
+                    aria-label={`${hw.title} ödevini sil`}
                   >
                     🗑️
                   </button>
@@ -119,7 +125,13 @@ export default function HomeworkList({ userId, courseId }) {
                   </div>
                   <button 
                     className="glass-button-icon text-red-400 hover:text-red-300 ml-2 pt-1" 
-                    onClick={(e) => { e.stopPropagation(); deleteHomework(hw.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
+                        deleteHomework(hw.id);
+                      }
+                    }}
+                    aria-label={`${hw.title} ödevini sil`}
                   >
                     🗑️
                   </button>

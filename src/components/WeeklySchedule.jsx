@@ -8,7 +8,7 @@ import CourseCard from './CourseCard';
  * @param {Function} onCourseClick - Derse tıklandığında çağrılacak fonksiyon
  * @param {Function} onAddCourse - Yeni ders ekleme fonksiyonu
  */
-export default function WeeklySchedule({ courses = [], onCourseClick, onAddCourse }) {
+export default function WeeklySchedule({ courses = [], loading = false, onCourseClick, onAddCourse }) {
   // O anki gün (Pazartesi=1, Cuma=5)
   const currentDay = new Date().getDay();
 
@@ -31,7 +31,11 @@ export default function WeeklySchedule({ courses = [], onCourseClick, onAddCours
 
   return (
     <div className="schedule-container relative">
-      {courses.length === 0 ? (
+      {loading ? (
+        <div className="flex-center" style={{ padding: 'var(--space-2xl) 0' }}>
+          <div className="loading-spinner" />
+        </div>
+      ) : courses.length === 0 ? (
         <div className="empty-state">
           <div className="text-4xl mb-4">📚</div>
           <h3>Henüz ders eklenmedi</h3>

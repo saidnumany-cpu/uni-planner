@@ -109,8 +109,13 @@ const CourseHomeworkSection = ({ course, userId }) => {
                 </div>
                 <button
                   className="glass-button glass-button-icon text-tertiary"
-                  onClick={() => deleteHomework(hw.id)}
+                  onClick={() => {
+                    if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
+                      deleteHomework(hw.id)
+                    }
+                  }}
                   title="Sil"
+                  aria-label={`${hw.title} ödevini sil`}
                   style={{ fontSize: '0.85rem' }}
                 >
                   🗑
@@ -138,8 +143,13 @@ const CourseHomeworkSection = ({ course, userId }) => {
                   </div>
                   <button
                     className="glass-button glass-button-icon text-tertiary"
-                    onClick={() => deleteHomework(hw.id)}
+                    onClick={() => {
+                      if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
+                        deleteHomework(hw.id)
+                      }
+                    }}
                     title="Sil"
+                    aria-label={`${hw.title} ödevini sil`}
                     style={{ fontSize: '0.85rem' }}
                   >
                     🗑

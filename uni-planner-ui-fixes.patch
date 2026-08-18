@@ -1,0 +1,198 @@
+diff --git a/src/components/CourseDetail.jsx b/src/components/CourseDetail.jsx
+index 760a140..53a7c32 100644
+--- a/src/components/CourseDetail.jsx
++++ b/src/components/CourseDetail.jsx
+@@ -31,7 +31,7 @@ export default function CourseDetail({ course, userId, onBack, onEditCourse }) {
+       >
+         <div className="flex-between">
+           <h2>{course.name}</h2>
+-          <button className="glass-button glass-button-icon" onClick={() => onEditCourse(course)}>
++          <button className="glass-button glass-button-icon" onClick={() => onEditCourse(course)} aria-label="Dersi düzenle">
+             ✏️
+           </button>
+         </div>
+diff --git a/src/components/HomeworkList.jsx b/src/components/HomeworkList.jsx
+index 190e270..4afe4ea 100644
+--- a/src/components/HomeworkList.jsx
++++ b/src/components/HomeworkList.jsx
+@@ -90,7 +90,13 @@ export default function HomeworkList({ userId, courseId }) {
+                   </div>
+                   <button 
+                     className="glass-button-icon text-red-400 hover:text-red-300 ml-2 pt-1" 
+-                    onClick={(e) => { e.stopPropagation(); deleteHomework(hw.id); }}
++                    onClick={(e) => {
++                      e.stopPropagation();
++                      if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
++                        deleteHomework(hw.id);
++                      }
++                    }}
++                    aria-label={`${hw.title} ödevini sil`}
+                   >
+                     🗑️
+                   </button>
+@@ -119,7 +125,13 @@ export default function HomeworkList({ userId, courseId }) {
+                   </div>
+                   <button 
+                     className="glass-button-icon text-red-400 hover:text-red-300 ml-2 pt-1" 
+-                    onClick={(e) => { e.stopPropagation(); deleteHomework(hw.id); }}
++                    onClick={(e) => {
++                      e.stopPropagation();
++                      if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
++                        deleteHomework(hw.id);
++                      }
++                    }}
++                    aria-label={`${hw.title} ödevini sil`}
+                   >
+                     🗑️
+                   </button>
+diff --git a/src/components/HomeworkOverview.jsx b/src/components/HomeworkOverview.jsx
+index 42e7f03..79437eb 100644
+--- a/src/components/HomeworkOverview.jsx
++++ b/src/components/HomeworkOverview.jsx
+@@ -109,8 +109,13 @@ const CourseHomeworkSection = ({ course, userId }) => {
+                 </div>
+                 <button
+                   className="glass-button glass-button-icon text-tertiary"
+-                  onClick={() => deleteHomework(hw.id)}
++                  onClick={() => {
++                    if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
++                      deleteHomework(hw.id)
++                    }
++                  }}
+                   title="Sil"
++                  aria-label={`${hw.title} ödevini sil`}
+                   style={{ fontSize: '0.85rem' }}
+                 >
+                   🗑
+@@ -138,8 +143,13 @@ const CourseHomeworkSection = ({ course, userId }) => {
+                   </div>
+                   <button
+                     className="glass-button glass-button-icon text-tertiary"
+-                    onClick={() => deleteHomework(hw.id)}
++                    onClick={() => {
++                      if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
++                        deleteHomework(hw.id)
++                      }
++                    }}
+                     title="Sil"
++                    aria-label={`${hw.title} ödevini sil`}
+                     style={{ fontSize: '0.85rem' }}
+                   >
+                     🗑
+diff --git a/src/components/WeeklySchedule.jsx b/src/components/WeeklySchedule.jsx
+index 1098714..7254e3c 100644
+--- a/src/components/WeeklySchedule.jsx
++++ b/src/components/WeeklySchedule.jsx
+@@ -8,7 +8,7 @@ import CourseCard from './CourseCard';
+  * @param {Function} onCourseClick - Derse tıklandığında çağrılacak fonksiyon
+  * @param {Function} onAddCourse - Yeni ders ekleme fonksiyonu
+  */
+-export default function WeeklySchedule({ courses = [], onCourseClick, onAddCourse }) {
++export default function WeeklySchedule({ courses = [], loading = false, onCourseClick, onAddCourse }) {
+   // O anki gün (Pazartesi=1, Cuma=5)
+   const currentDay = new Date().getDay();
+ 
+@@ -31,7 +31,11 @@ export default function WeeklySchedule({ courses = [], onCourseClick, onAddCours
+ 
+   return (
+     <div className="schedule-container relative">
+-      {courses.length === 0 ? (
++      {loading ? (
++        <div className="flex-center" style={{ padding: 'var(--space-2xl) 0' }}>
++          <div className="loading-spinner" />
++        </div>
++      ) : courses.length === 0 ? (
+         <div className="empty-state">
+           <div className="text-4xl mb-4">📚</div>
+           <h3>Henüz ders eklenmedi</h3>
+diff --git a/src/contexts/AuthContext.jsx b/src/contexts/AuthContext.jsx
+index e75fc21..fb9f23b 100644
+--- a/src/contexts/AuthContext.jsx
++++ b/src/contexts/AuthContext.jsx
+@@ -12,7 +12,6 @@ export const AuthProvider = ({ children }) => {
+     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+       setUser(currentUser);
+       setLoading(false);
+-      console.log('Auth state changed:', currentUser?.email);
+     });
+ 
+     return () => unsubscribe();
+diff --git a/src/index.css b/src/index.css
+index d08e545..952cfe0 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -1077,3 +1077,74 @@ input[type="time"].glass-input {
+   color-scheme: dark;
+ }
+ 
++/* ==========================================================================
++   29. Utility Classes
++   Bileşenlerde kullanılan ancak daha önce tanımlanmamış yardımcı sınıflar.
++   (Tailwind kurulu olmadığı için bu sınıflar boş kalıyor ve HomeworkList,
++   HomeworkModal, WeeklyNotes, CourseDetail, WeeklySchedule gibi yerlerde
++   boşluk/renk/hizalama sessizce kayboluyordu.)
++   ========================================================================== */
++
++/* Flex yardımcıları */
++.flex-1 { flex: 1 1 0%; }
++.flex-shrink-0 { flex-shrink: 0; }
++.items-center { align-items: center; }
++.items-start { align-items: flex-start; }
++.justify-end { justify-content: flex-end; }
++.gap-xs { gap: var(--space-xs); }
++.overflow-x-auto {
++  overflow-x: auto;
++  -webkit-overflow-scrolling: touch;
++}
++
++/* Boşluklar (padding / margin) */
++.p-4 { padding: var(--space-md); }
++.pt-1 { padding-top: 4px; }
++.pb-2 { padding-bottom: var(--space-sm); }
++.pb-20 { padding-bottom: 80px; }
++.mb-1 { margin-bottom: 4px; }
++.mb-2 { margin-bottom: var(--space-sm); }
++.mb-3 { margin-bottom: 12px; }
++.mb-4 { margin-bottom: var(--space-md); }
++.mb-6 { margin-bottom: var(--space-lg); }
++.ml-2 { margin-left: var(--space-sm); }
++.mt-2 { margin-top: var(--space-sm); }
++.mt-4 { margin-top: var(--space-md); }
++
++/* Tipografi */
++.text-4xl { font-size: 2.25rem; line-height: 1; }
++.text-center { text-align: center; }
++.uppercase { text-transform: uppercase; }
++.tracking-wider { letter-spacing: 0.05em; }
++.font-semibold { font-weight: 600; }
++.text-white { color: #fff; }
++
++/* Renkler */
++.text-red-400 { color: #f87171; }
++.hover\:text-red-300:hover { color: #fca5a5; }
++.text-emerald-400 { color: #34d399; }
++.accent-emerald-500 { accent-color: var(--accent-emerald); }
++
++/* Kenarlık / gölge / köşe yuvarlama */
++.rounded { border-radius: var(--glass-radius-sm); }
++.rounded-lg { border-radius: var(--glass-radius); }
++.border-white\/30 { border-color: rgba(255, 255, 255, 0.3); }
++.border-white\/40 { border-color: rgba(255, 255, 255, 0.4); }
++.bg-white\/10 { background-color: rgba(255, 255, 255, 0.1); }
++.shadow-inner { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25); }
++.shadow-lg { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
++
++/* Boyutlandırma */
++.w-5 { width: 20px; }
++.h-5 { height: 20px; }
++.min-h-\[300px\] { min-height: 300px; }
++
++/* Diğer */
++.cursor-pointer { cursor: pointer; }
++.line-clamp-2 {
++  display: -webkit-box;
++  -webkit-line-clamp: 2;
++  -webkit-box-orient: vertical;
++  overflow: hidden;
++}
++
