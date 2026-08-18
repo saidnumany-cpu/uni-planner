@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { DAYS, TIME_SLOTS, COURSE_COLORS } from '../utils/constants';
 
 /**
@@ -91,7 +92,7 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
     }
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="glass modal-content glass-card">
         <h2 style={{ marginBottom: 'var(--space-lg)' }}>
@@ -229,7 +230,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

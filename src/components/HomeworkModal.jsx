@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Ödev Ekleme/Düzenleme Modalı
@@ -32,7 +33,7 @@ export default function HomeworkModal({ isOpen, onClose, onSave, homework }) {
     onSave({ title, description, dueDate });
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content glass-card glass" onClick={e => e.stopPropagation()}>
         <h2 className="mb-4">{homework ? 'Ödevi Düzenle' : 'Yeni Ödev Ekle'}</h2>
@@ -81,6 +82,7 @@ export default function HomeworkModal({ isOpen, onClose, onSave, homework }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
