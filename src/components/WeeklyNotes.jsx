@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useNotes from '../hooks/useNotes';
 import { SEMESTER_WEEKS } from '../utils/constants';
+import { SaveIcon } from '../icons/SVGIcons';
 
 /**
  * Ders notları düzenleyicisi
@@ -57,6 +58,7 @@ export default function WeeklyNotes({ userId, courseId }) {
         await saveNote(activeWeek, newContent);
         setSaveMessage('Kaydedildi ✓');
       } catch (err) {
+        console.error('Not kaydetme hatası:', err);
         setSaveMessage('Kayıt hatası!');
       } finally {
         setIsSaving(false);
@@ -76,6 +78,7 @@ export default function WeeklyNotes({ userId, courseId }) {
         setIsSaving(false);
         pendingRef.current = null;
       } catch (err) {
+        console.error('Not kaydetme hatası:', err);
         setSaveMessage('Kayıt hatası!');
       }
     }
@@ -86,13 +89,13 @@ export default function WeeklyNotes({ userId, courseId }) {
   return (
     <div className="weekly-notes flex-col gap-md">
       {/* Hafta Seçici */}
-      <div className="week-selector flex gap-sm overflow-x-auto pb-2" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="week-selector flex gap-sm pb-2" style={{ flexWrap: 'wrap' }}>
         {Array.from({ length: SEMESTER_WEEKS }, (_, i) => i + 1).map((week) => (
           <button
             key={week}
-            className={`glass-button flex-shrink-0 ${activeWeek === week ? 'bg-white/10 shadow-inner text-white border-white/30' : 'text-secondary'}`}
+            className={`glass-button ${activeWeek === week ? 'bg-white/10 shadow-inner text-white border-white/30' : 'text-secondary'}`}
             onClick={() => setActiveWeek(week)}
-            style={activeWeek === week ? { background: 'var(--glass-bg-active)' } : {}}
+            style={{ ...(activeWeek === week ? { background: 'var(--glass-bg-active)' } : {}), minHeight: '44px', padding: '0 12px' }}
           >
             {week}. Hafta
           </button>
@@ -101,6 +104,14 @@ export default function WeeklyNotes({ userId, courseId }) {
 
       {/* Textarea */}
       <div className="relative">
+        <div className="flex-between text-xs text-tertiary mb-2">
+          <span>{wordCount} kelime</span>
+          <span className={`flex items-center gap-1 ${saveMessage.includes('hata') ? 'text-red-400' : 'text-emerald-400'}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {saveMessage && <SaveIcon size={14} />}
+            {saveMessage}
+          </span>
+        </div>
+        
         <textarea
           className="glass-textarea min-h-[300px]"
           placeholder={`${activeWeek}. Hafta notlarınızı buraya yazın...`}
@@ -108,14 +119,8 @@ export default function WeeklyNotes({ userId, courseId }) {
           onChange={handleChange}
           onBlur={handleBlur}
           disabled={loading}
+          style={{ width: '100%', minHeight: '300px' }}
         />
-        
-        <div className="flex-between text-xs text-tertiary mt-2">
-          <span>{wordCount} kelime</span>
-          <span className={saveMessage.includes('hata') ? 'text-red-400' : 'text-emerald-400'}>
-            {saveMessage}
-          </span>
-        </div>
       </div>
     </div>
   );

@@ -1,33 +1,93 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { GoogleIcon } from '../icons/SVGIcons';
 
 /**
  * Kullanıcı giriş ekranı
  */
 const LoginScreen = () => {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, signInWithGoogleRedirect } = useAuth();
   const [error, setError] = useState('');
+  const [errorDetail, setErrorDetail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showRedirectOption, setShowRedirectOption] = useState(false);
+
+  const getErrorMessage = (err) => {
+    const code = err?.code || '';
+    if (code === 'auth/unauthorized-domain') {
+      return {
+        title: 'Bu alan adı (domain) yetkilendirilmemiş.',
+        detail: 'Firebase Console > Authentication > Settings > Authorized domains bölümüne "uni-planner-xi.vercel.app" eklenmelidir.'
+      };
+    }
+    if (code === 'auth/popup-blocked') {
+      return {
+        title: 'Açılır pencere (popup) tarayıcınız tarafından engellendi.',
+        detail: 'Lütfen tarayıcınızdan açılır pencerelere izin verin veya aşağıdaki "Yönlendirme ile Giriş Yap" seçeneğini kullanın.'
+      };
+    }
+    if (code === 'auth/popup-closed-by-user') {
+      return {
+        title: 'Giriş penceresi tamamlanmadan kapatıldı.',
+        detail: 'Lütfen tekrar deneyerek Google hesabınızı seçin.'
+      };
+    }
+    if (code === 'auth/network-request-failed') {
+      return {
+        title: 'Ağ bağlantısı hatası oluştu.',
+        detail: 'Lütfen internet bağlantınızı kontrol edip tekrar deneyin.'
+      };
+    }
+    if (code === 'auth/cancelled-popup-request') {
+      return {
+        title: 'Giriş işlemi iptal edildi.',
+        detail: 'Birden fazla pencere açılmış olabilir. Lütfen tekrar deneyin.'
+      };
+    }
+    return {
+      title: 'Giriş yapılırken bir hata oluştu.',
+      detail: err?.message || 'Lütfen tekrar deneyin.'
+    };
+  };
 
   const handleLogin = async () => {
     try {
       setError('');
+      setErrorDetail('');
       setIsLoading(true);
       await signInWithGoogle();
     } catch (err) {
-      setError('Giriş yapılırken bir hata oluştu. Lütfen tekrar deneyin.');
-      console.error(err);
+      console.error('Login error:', err);
+      const parsed = getErrorMessage(err);
+      setError(parsed.title);
+      setErrorDetail(parsed.detail);
+      if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/cancelled-popup-request') {
+        setShowRedirectOption(true);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRedirectLogin = async () => {
+    try {
+      setError('');
+      setErrorDetail('');
+      setIsLoading(true);
+      await signInWithGoogleRedirect();
+    } catch (err) {
+      console.error('Redirect login error:', err);
+      const parsed = getErrorMessage(err);
+      setError(parsed.title);
+      setErrorDetail(parsed.detail);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex-center animate-fade-in" style={{ minHeight: '100dvh' }}>
-      <div className="bg-orb bg-orb-1" />
-      <div className="bg-orb bg-orb-2" />
-      <div className="bg-orb bg-orb-3" />
-      <div className="glass glass-card animate-slide-up" style={{ width: '100%', maxWidth: '400px', margin: 'var(--space-md)', textAlign: 'center' }}>
+    <div className="flex-center animate-fade-in" style={{ minHeight: '100dvh', padding: 'var(--space-md)' }}>
+      <div className="glass glass-card animate-slide-up" style={{ width: '100%', maxWidth: '420px', textAlign: 'center' }}>
         <div style={{ fontSize: '4rem', marginBottom: 'var(--space-md)' }}>
           🎓
         </div>
@@ -37,8 +97,23 @@ const LoginScreen = () => {
         </p>
 
         {error && (
-          <div className="glass-surface text-sm" style={{ color: 'var(--accent-red)', padding: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
-            {error}
+          <div 
+            className="glass-surface text-sm" 
+            style={{ 
+              color: 'var(--accent-red)', 
+              padding: 'var(--space-md)', 
+              marginBottom: 'var(--space-md)',
+              textAlign: 'left',
+              borderRadius: 'var(--glass-radius-sm)',
+              border: '1px solid rgba(220, 38, 38, 0.3)'
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: errorDetail ? '4px' : 0 }}>{error}</div>
+            {errorDetail && (
+              <div className="text-xs" style={{ color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                {errorDetail}
+              </div>
+            )}
           </div>
         )}
 
@@ -46,19 +121,37 @@ const LoginScreen = () => {
           className="glass-button glass-button-primary" 
           onClick={handleLogin}
           disabled={isLoading}
-          style={{ width: '100%', padding: 'var(--space-md)' }}
+          aria-busy={isLoading}
+          style={{ width: '100%', padding: 'var(--space-md)', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.16v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.16C1.43 8.55 1 10.22 1 12s.43 3.45 1.16 4.93l3.68-2.84z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.16 7.07l3.68 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-          </svg>
+          {isLoading ? (
+            <div className="spinner" style={{ width: '22px', height: '22px', border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          ) : (
+            <GoogleIcon size={22} />
+          )}
           {isLoading ? 'Giriş yapılıyor...' : 'Google ile Giriş Yap'}
         </button>
+
+        {showRedirectOption && (
+          <button
+            className="glass-button text-xs text-secondary"
+            onClick={handleRedirectLogin}
+            disabled={isLoading}
+            style={{ width: '100%', marginTop: 'var(--space-sm)', minHeight: '36px' }}
+          >
+            Yönlendirme (Redirect) ile Giriş Yap
+          </button>
+        )}
       </div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
 
 export default LoginScreen;
+

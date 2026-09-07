@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { LogOutIcon, UserIcon } from '../icons/SVGIcons';
 
 /**
  * Üst navigasyon barı
@@ -19,7 +20,13 @@ const Header = () => {
 
   const getInitials = (name) => {
     if (!name) return '?';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    } else if (parts[0].length >= 2) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
   };
 
   return (
@@ -58,9 +65,9 @@ const Header = () => {
             ) : (
               <div 
                 className="flex-center glass-surface" 
-                style={{ width: '36px', height: '36px', borderRadius: '50%', fontWeight: '600' }}
+                style={{ width: '36px', height: '36px', borderRadius: '50%', fontWeight: '600', color: 'var(--text-secondary)' }}
               >
-                {getInitials(user.displayName || user.email)}
+                {user.displayName || user.email ? getInitials(user.displayName || user.email) : <UserIcon size={20} />}
               </div>
             )}
           </div>
@@ -69,12 +76,9 @@ const Header = () => {
             onClick={handleSignOut} 
             className="glass-button glass-button-icon"
             title="Çıkış Yap"
+            style={{ minHeight: '44px', minWidth: '44px' }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
+            <LogOutIcon size={20} />
           </button>
         </div>
       </div>

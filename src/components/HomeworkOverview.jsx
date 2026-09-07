@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useHomework } from '../hooks/useHomework'
+import { useAllHomework } from '../hooks/useAllHomework'
 import HomeworkModal from './HomeworkModal'
 import EmptyState from './EmptyState'
 import { getDueDateStatus } from '../utils/helpers'
@@ -9,6 +9,8 @@ import { getDueDateStatus } from '../utils/helpers'
  * Tüm aktif ödevleri tek bir listede gösterir
  */
 const HomeworkOverview = ({ courses, userId }) => {
+  const { homeworkByCourse, loading, addHomework, toggleComplete, deleteHomework } = useAllHomework(userId, courses)
+
   return (
     <div className="animate-fade-in">
       <div className="flex-between" style={{ marginBottom: 'var(--space-lg)' }}>
@@ -21,13 +23,20 @@ const HomeworkOverview = ({ courses, userId }) => {
           title="Henüz ders eklenmedi"
           description="Önce ders eklemeniz gerekiyor"
         />
+      ) : loading ? (
+        <div className="text-center" style={{ padding: 'var(--space-xl)' }}>
+          <p className="text-secondary">Ödevler yükleniyor...</p>
+        </div>
       ) : (
         <div className="flex-col gap-md">
           {courses.map(course => (
             <CourseHomeworkSection
               key={course.id}
               course={course}
-              userId={userId}
+              homework={homeworkByCourse[course.id] || []}
+              onAdd={(data) => addHomework(course.id, data)}
+              onToggle={(hwId, state) => toggleComplete(course.id, hwId, state)}
+              onDelete={(hwId) => deleteHomework(course.id, hwId)}
             />
           ))}
         </div>
@@ -37,14 +46,11 @@ const HomeworkOverview = ({ courses, userId }) => {
 }
 
 /** Tek bir ders için ödev bölümü */
-const CourseHomeworkSection = ({ course, userId }) => {
-  const { homework, loading, addHomework, toggleComplete, deleteHomework } = useHomework(userId, course.id)
+const CourseHomeworkSection = ({ course, homework, onAdd, onToggle, onDelete }) => {
   const [modalOpen, setModalOpen] = useState(false)
 
   const activeHomework = homework.filter(hw => !hw.isCompleted)
   const completedHomework = homework.filter(hw => hw.isCompleted)
-
-  if (loading) return null
 
   const getDueDateLabel = (dueDate) => {
     const status = getDueDateStatus(dueDate)
@@ -92,7 +98,7 @@ const CourseHomeworkSection = ({ course, userId }) => {
                 <div className="flex gap-sm" style={{ alignItems: 'flex-start', flex: 1 }}>
                   <button
                     className="attendance-toggle"
-                    onClick={() => toggleComplete(hw.id, hw.isCompleted)}
+                    onClick={() => onToggle(hw.id, hw.isCompleted)}
                     title="Tamamla"
                   />
                   <div style={{ flex: 1 }}>
@@ -111,7 +117,7 @@ const CourseHomeworkSection = ({ course, userId }) => {
                   className="glass-button glass-button-icon text-tertiary"
                   onClick={() => {
                     if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
-                      deleteHomework(hw.id)
+                      onDelete(hw.id)
                     }
                   }}
                   title="Sil"
@@ -134,7 +140,7 @@ const CourseHomeworkSection = ({ course, userId }) => {
                   <div className="flex gap-sm" style={{ alignItems: 'center', flex: 1 }}>
                     <button
                       className="attendance-toggle checked"
-                      onClick={() => toggleComplete(hw.id, hw.isCompleted)}
+                      onClick={() => onToggle(hw.id, hw.isCompleted)}
                       title="Geri Al"
                     />
                     <span style={{ fontWeight: 400, textDecoration: 'line-through', opacity: 0.5 }}>
@@ -145,7 +151,7 @@ const CourseHomeworkSection = ({ course, userId }) => {
                     className="glass-button glass-button-icon text-tertiary"
                     onClick={() => {
                       if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
-                        deleteHomework(hw.id)
+                        onDelete(hw.id)
                       }
                     }}
                     title="Sil"
@@ -165,7 +171,7 @@ const CourseHomeworkSection = ({ course, userId }) => {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onSave={async (data) => {
-          await addHomework(data)
+          await onAdd(data)
           setModalOpen(false)
         }}
         homework={null}

@@ -1,5 +1,5 @@
-import { useAttendance } from '../hooks/useAttendance'
-import { useHomework } from '../hooks/useHomework'
+import { useAllAttendance } from '../hooks/useAllAttendance'
+import { useAllHomework } from '../hooks/useAllHomework'
 import EmptyState from './EmptyState'
 import { SEMESTER_WEEKS } from '../utils/constants'
 
@@ -8,6 +8,9 @@ import { SEMESTER_WEEKS } from '../utils/constants'
  * Tüm derslerin yoklama ve ödev durumlarını gösterir
  */
 const StatsOverview = ({ courses, userId }) => {
+  const { attendanceByCourse, loading: attLoading } = useAllAttendance(userId, courses, SEMESTER_WEEKS)
+  const { homeworkByCourse, loading: hwLoading } = useAllHomework(userId, courses)
+
   if (courses.length === 0) {
     return (
       <div className="animate-fade-in">
@@ -20,6 +23,8 @@ const StatsOverview = ({ courses, userId }) => {
       </div>
     )
   }
+
+  const isLoading = attLoading || hwLoading;
 
   return (
     <div className="animate-fade-in">
@@ -46,25 +51,30 @@ const StatsOverview = ({ courses, userId }) => {
         </div>
       </div>
 
-      {/* Ders Bazlı İstatistikler */}
-      <div className="flex-col gap-md">
-        {courses.map(course => (
-          <CourseStatCard
-            key={course.id}
-            course={course}
-            userId={userId}
-          />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="text-center" style={{ padding: 'var(--space-xl)' }}>
+          <p className="text-secondary">İstatistikler yükleniyor...</p>
+        </div>
+      ) : (
+        <div className="flex-col gap-md">
+          {courses.map(course => (
+            <CourseStatCard
+              key={course.id}
+              course={course}
+              attendanceData={attendanceByCourse[course.id]}
+              homework={homeworkByCourse[course.id] || []}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 /** Tek bir ders için istatistik kartı */
-const CourseStatCard = ({ course, userId }) => {
-  const { stats } = useAttendance(userId, course.id, SEMESTER_WEEKS)
-  const { homework } = useHomework(userId, course.id)
-
+const CourseStatCard = ({ course, attendanceData, homework }) => {
+  const stats = attendanceData?.stats || { total: SEMESTER_WEEKS, attended: 0, missed: 0, percentage: 0 };
+  
   const completedHw = homework.filter(hw => hw.isCompleted).length
   const totalHw = homework.length
 

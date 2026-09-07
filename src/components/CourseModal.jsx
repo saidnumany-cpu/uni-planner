@@ -1,6 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DAYS, TIME_SLOTS, COURSE_COLORS } from '../utils/constants';
+import ConfirmDialog from './ConfirmDialog';
+
+/* Human-readable color labels for accessibility */
+const COLOR_LABELS = {
+  '#7c3aed': 'Mor',
+  '#2563eb': 'Mavi',
+  '#0891b2': 'Camgöbeği',
+  '#059669': 'Yeşil',
+  '#d97706': 'Amber',
+  '#dc2626': 'Kırmızı',
+  '#db2777': 'Pembe',
+  '#4f46e5': 'İndigo',
+  '#0d9488': 'Deniz Yeşili',
+  '#ea580c': 'Turuncu'
+};
 
 /**
  * Ders ekleme/düzenleme modali
@@ -17,6 +32,9 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
   });
 
   const [errors, setErrors] = useState({});
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const modalRef = useRef(null);
+  const titleId = 'course-modal-title';
 
   useEffect(() => {
     if (course) {
@@ -43,13 +61,39 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
     setErrors({});
   }, [course, isOpen]);
 
+  /* Focus trap + ESC handling */
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') {
+      onClose();
+      return;
+    }
+    /* Focus trapping */
+    if (e.key === 'Tab' && modalRef.current) {
+      const focusable = modalRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }, [onClose]);
+
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
+      /* Auto-focus first input */
+      requestAnimationFrame(() => {
+        const firstInput = modalRef.current?.querySelector('input, select, textarea');
+        firstInput?.focus();
+      });
     } else {
       document.body.style.overflow = '';
     }
@@ -57,7 +101,7 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, handleKeyDown]);
 
   if (!isOpen) return null;
 
@@ -92,32 +136,51 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
     }
   };
 
+  const handleDeleteClick = () => {
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    setConfirmOpen(false);
+    onDelete(course.id);
+  };
+
   return createPortal(
-    <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="glass modal-content glass-card">
-        <h2 style={{ marginBottom: 'var(--space-lg)' }}>
+    <div
+      className="modal-overlay"
+      onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+    >
+      <div className="glass modal-content glass-card" ref={modalRef}>
+        <h2 id={titleId} style={{ marginBottom: 'var(--space-lg)' }}>
           {course ? 'Dersi Düzenle' : 'Yeni Ders Ekle'}
         </h2>
         
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
-            <label className="form-label">Ders Adı *</label>
+            <label className="form-label" htmlFor="course-name">Ders Adı *</label>
             <input 
               type="text" 
+              id="course-name"
               name="name"
-              className="glass-input" 
+              className={`glass-input${errors.name ? ' input-error' : ''}`}
               value={formData.name}
               onChange={handleChange}
               placeholder="Örn: Matematik 101"
-              autoFocus
+              aria-required="true"
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? 'name-error' : undefined}
             />
-            {errors.name && <div className="text-xs text-secondary" style={{ color: 'var(--accent-red)', marginTop: '4px' }}>{errors.name}</div>}
+            {errors.name && <div id="name-error" className="form-error">{errors.name}</div>}
           </div>
 
           <div className="form-group">
-            <label className="form-label">Öğretim Üyesi</label>
+            <label className="form-label" htmlFor="course-instructor">Öğretim Üyesi <span className="text-tertiary">(İsteğe bağlı)</span></label>
             <input 
               type="text" 
+              id="course-instructor"
               name="instructor"
               className="glass-input" 
               value={formData.instructor}
@@ -128,8 +191,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Gün *</label>
-              <select name="day" className="glass-input" value={formData.day} onChange={handleChange}>
+              <label className="form-label" htmlFor="course-day">Gün *</label>
+              <select id="course-day" name="day" className="glass-input" value={formData.day} onChange={handleChange} aria-required="true">
                 {DAYS.map(day => (
                   <option key={day} value={day}>{day}</option>
                 ))}
@@ -139,8 +202,9 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Başlangıç</label>
+              <label className="form-label" htmlFor="course-start">Başlangıç</label>
               <select
+                id="course-start"
                 name="startTime"
                 className="glass-input"
                 value={formData.startTime}
@@ -153,25 +217,29 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Bitiş</label>
+              <label className="form-label" htmlFor="course-end">Bitiş</label>
               <select
+                id="course-end"
                 name="endTime"
-                className="glass-input"
+                className={`glass-input${errors.endTime ? ' input-error' : ''}`}
                 value={formData.endTime}
                 onChange={handleChange}
+                aria-invalid={!!errors.endTime}
+                aria-describedby={errors.endTime ? 'endtime-error' : undefined}
               >
                 {TIME_SLOTS.map(time => (
                   <option key={time} value={time}>{time}</option>
                 ))}
               </select>
-              {errors.endTime && <div className="text-xs" style={{ color: 'var(--accent-red)', marginTop: '4px' }}>{errors.endTime}</div>}
+              {errors.endTime && <div id="endtime-error" className="form-error">{errors.endTime}</div>}
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Derslik</label>
+            <label className="form-label" htmlFor="course-location">Derslik <span className="text-tertiary">(İsteğe bağlı)</span></label>
             <input 
               type="text" 
+              id="course-location"
               name="location"
               className="glass-input" 
               value={formData.location}
@@ -182,17 +250,20 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
 
           <div className="form-group">
             <label className="form-label">Renk</label>
-            <div className="flex" style={{ gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
+            <div className="flex" style={{ gap: 'var(--space-sm)', flexWrap: 'wrap' }} role="radiogroup" aria-label="Ders rengi seç">
               {COURSE_COLORS.map(color => (
                 <button
                   key={color}
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, color }))}
-                  aria-label={`Renk seç: ${color}`}
-                  aria-pressed={formData.color === color}
+                  aria-label={`Renk: ${COLOR_LABELS[color] || color}`}
+                  role="radio"
+                  aria-checked={formData.color === color}
                   style={{
-                    width: '32px',
-                    height: '32px',
+                    width: '36px',
+                    height: '36px',
+                    minWidth: '36px',
+                    minHeight: '36px',
                     borderRadius: '50%',
                     backgroundColor: color,
                     cursor: 'pointer',
@@ -209,11 +280,7 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
           <div className="flex-between" style={{ marginTop: 'var(--space-xl)' }}>
             <div>
               {course && onDelete && (
-                <button type="button" className="glass-button glass-button-danger" onClick={() => {
-                  if (window.confirm('Bu dersi silmek istediğinizden emin misiniz?')) {
-                    onDelete(course.id);
-                  }
-                }}>
+                <button type="button" className="glass-button glass-button-danger" onClick={handleDeleteClick}>
                   Sil
                 </button>
               )}
@@ -230,6 +297,18 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
           </div>
         </form>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmOpen(false)}
+        title="Dersi Sil"
+        message={`"${formData.name}" dersini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve derse ait tüm notlar, ödevler ve yoklama verileri silinecektir.`}
+        confirmText="Evet, Sil"
+        cancelText="Vazgeç"
+        variant="danger"
+      />
     </div>,
     document.body
   );

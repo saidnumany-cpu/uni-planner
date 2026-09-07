@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import { 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  signOut as firebaseSignOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
 import { auth } from '../firebase';
 
 const AuthContext = createContext(null);
@@ -9,6 +16,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Handle redirect result if user used redirect sign-in
+    getRedirectResult(auth).catch((error) => {
+      console.warn('Redirect sign-in result check:', error);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -17,12 +29,35 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const signInWithGoogle = async () => {
+  const getGoogleProvider = () => {
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+    return provider;
+  };
+
+  const signInWithGoogle = async () => {
+    const provider = getGoogleProvider();
     try {
-      await signInWithPopup(auth, provider);
+      return await signInWithPopup(auth, provider);
     } catch (error) {
-      console.error('Error signing in with Google:', error);
+      console.error('Error signing in with Google Popup:', error);
+      // If popup is blocked by browser, attempt redirect
+      if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request') {
+        console.info('Popup blocked/cancelled, attempting signInWithRedirect...');
+        return await signInWithRedirect(auth, provider);
+      }
+      throw error;
+    }
+  };
+
+  const signInWithGoogleRedirect = async () => {
+    const provider = getGoogleProvider();
+    try {
+      return await signInWithRedirect(auth, provider);
+    } catch (error) {
+      console.error('Error signing in with Google Redirect:', error);
       throw error;
     }
   };
@@ -40,6 +75,7 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     signInWithGoogle,
+    signInWithGoogleRedirect,
     signOut,
   };
 
@@ -57,3 +93,4 @@ export const useAuth = () => {
   }
   return context;
 };
+
