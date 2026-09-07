@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import useAttendance from '../hooks/useAttendance';
 import { SEMESTER_WEEKS } from '../utils/constants';
+import { CheckIcon, XIcon, CalendarIcon } from '../icons/SVGIcons';
 
 /**
  * Yoklama takibi bileşeni
@@ -15,7 +17,7 @@ export default function AttendanceTracker({ userId, courseId }) {
 
   const getWeekStatus = (weekNumber) => {
     const record = attendance.find(a => String(a.week) === String(weekNumber));
-    if (!record) return 'unrecorded';
+    if (!record || record.attended === null || record.attended === undefined) return 'unrecorded';
     return record.attended ? 'attended' : 'missed';
   };
 
@@ -34,7 +36,7 @@ export default function AttendanceTracker({ userId, courseId }) {
       setMissedNote('');
       setNoteModalOpen(true);
     } else {
-      await toggleAttendance(weekNumber, true, '');
+      await toggleAttendance(weekNumber, null, '');
     }
   };
 
@@ -59,23 +61,24 @@ export default function AttendanceTracker({ userId, courseId }) {
       {/* İstatistikler */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-number" style={{ color: 'var(--accent-emerald)' }}>
-            {stats.attended}
+          <div className="stat-number" style={{ color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+            <CheckIcon size={24} /> {stats.attended}
           </div>
           <div className="stat-label">Katıldım</div>
         </div>
         <div className="stat-card">
-          <div className="stat-number" style={{ color: stats.missed > 0 ? 'var(--accent-red)' : 'var(--text-primary)' }}>
-            {stats.missed}
+          <div className="stat-number" style={{ color: stats.missed > 0 ? 'var(--accent-red)' : 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+            <XIcon size={24} /> {stats.missed}
           </div>
           <div className="stat-label">Devamsızlık</div>
         </div>
         <div className="stat-card">
           <div className="stat-number" style={{
             color: stats.percentage >= 70 ? 'var(--accent-emerald)' :
-                   stats.percentage >= 50 ? 'var(--accent-amber)' : 'var(--accent-red)'
+                   stats.percentage >= 50 ? 'var(--accent-amber)' : 'var(--accent-red)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
           }}>
-            {stats.attended + stats.missed > 0 ? `%${stats.percentage}` : '—'}
+            <CalendarIcon size={24} /> {stats.attended + stats.missed > 0 ? `%${stats.percentage}` : '—'}
           </div>
           <div className="stat-label">Devam Oranı</div>
         </div>
@@ -87,12 +90,13 @@ export default function AttendanceTracker({ userId, courseId }) {
           Haftalık Yoklama Çizelgesi
         </h3>
         <p className="text-xs text-tertiary" style={{ textAlign: 'center', marginBottom: 'var(--space-md)' }}>
-          Tıklayarak değiştir: Boş → ✓ Katıldım → ✗ Devamsız → ✓ Katıldım
+          Tıklayarak değiştir: Boş → ✓ Katıldım → ✗ Devamsız → Boş
         </p>
         <div className="attendance-grid">
           {Array.from({ length: SEMESTER_WEEKS }, (_, i) => i + 1).map(week => {
             const status = getWeekStatus(week);
             const note = getWeekNote(week);
+            const ariaLabel = `Hafta ${week}: ${status === 'attended' ? 'Katıldı' : status === 'missed' ? 'Devamsız' : 'Belirtilmedi'}`;
             
             return (
               <div key={week} className="flex-col" style={{ alignItems: 'center', gap: 'var(--space-xs)' }}>
@@ -100,14 +104,15 @@ export default function AttendanceTracker({ userId, courseId }) {
                   className={`attendance-toggle ${status === 'attended' ? 'checked' : ''} ${status === 'missed' ? 'missed' : ''}`}
                   onClick={() => handleToggle(week)}
                   title={note || `${week}. Hafta`}
-                  style={{ width: '48px', height: '48px', fontSize: status === 'unrecorded' ? '0.85rem' : '1.1rem' }}
+                  aria-label={ariaLabel}
+                  style={{ width: '48px', height: '48px', fontSize: status === 'unrecorded' ? '0.85rem' : '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  {status === 'attended' ? '✓' : status === 'missed' ? '✗' : week}
+                  {status === 'attended' ? <CheckIcon size={20} /> : status === 'missed' ? <XIcon size={20} /> : week}
                 </button>
                 <span className="text-xs text-tertiary">{week}. Hafta</span>
                 {note && (
-                  <span className="text-xs" style={{ color: 'var(--accent-amber)', maxWidth: '60px', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    📝
+                  <span className="text-xs" style={{ color: 'var(--accent-amber)', maxWidth: '60px', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={note}>
+                    <CalendarIcon size={12} style={{ display: 'inline' }} />
                   </span>
                 )}
               </div>
@@ -116,10 +121,20 @@ export default function AttendanceTracker({ userId, courseId }) {
         </div>
       </div>
 
-      {/* Devamsızlık Notu Modalı */}
-      {noteModalOpen && (
-        <div className="modal-overlay" onClick={() => setNoteModalOpen(false)}>
-          <div className="modal-content glass glass-card" onClick={e => e.stopPropagation()}>
+      {/* Devamsızlık Notu Modalı — rendered via portal to avoid overflow:hidden clipping */}
+      {noteModalOpen && createPortal(
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 'var(--z-modal-overlay)' }}
+          onClick={() => setNoteModalOpen(false)}
+        >
+          <div
+            className="modal-content glass glass-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Devamsızlık Notu"
+            onClick={e => e.stopPropagation()}
+          >
             <h3 style={{ color: 'var(--accent-red)', marginBottom: 'var(--space-md)' }}>
               Devamsızlık Notu
             </h3>
@@ -132,6 +147,7 @@ export default function AttendanceTracker({ userId, courseId }) {
               value={missedNote}
               onChange={e => setMissedNote(e.target.value)}
               style={{ marginBottom: 'var(--space-md)' }}
+              autoFocus
             />
             <div className="flex" style={{ justifyContent: 'flex-end', gap: 'var(--space-sm)' }}>
               <button className="glass-button" onClick={() => setNoteModalOpen(false)}>
@@ -142,7 +158,8 @@ export default function AttendanceTracker({ userId, courseId }) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
