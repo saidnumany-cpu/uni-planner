@@ -1,39 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { DAYS, TIME_SLOTS } from '../utils/constants';
+import { DAYS, TIME_SLOTS, isFullHour } from '../utils/constants';
 import CourseCard from './CourseCard';
 import { PlusIcon } from '../icons/SVGIcons';
 
+// Her slot 15 dakika. Piksel başına 1px = 15 dk baz alındı.
+// Daha okunaklı bir grid için: 1 slot = 16px → 1 saat = 64px
+const SLOT_HEIGHT = 16; // px per 15-min slot
+
 /**
  * Ana haftalık program görünümü
- * @param {Array} courses - Ders listesi
- * @param {Function} onCourseClick - Derse tıklandığında çağrılacak fonksiyon
- * @param {Function} onAddCourse - Yeni ders ekleme fonksiyonu
  */
 export default function WeeklySchedule({ courses = [], loading = false, onCourseClick, onAddCourse }) {
-  // O anki gün (Pazartesi=1, Cuma=5)
   const currentDayIndex = new Date().getDay() - 1;
   const initialSelectedDay = currentDayIndex >= 0 && currentDayIndex <= 4 ? currentDayIndex : 0;
-  
-  const [viewMode, setViewMode] = useState('week'); // 'week' | 'day'
+
+  const [viewMode, setViewMode] = useState('week');
   const [selectedDay, setSelectedDay] = useState(initialSelectedDay);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 768px)');
     const handleMediaChange = (e) => {
-      if (e.matches) {
-        setViewMode('day');
-      } else {
-        setViewMode('week');
-      }
+      setViewMode(e.matches ? 'day' : 'week');
     };
-    
-    // Initial check
     handleMediaChange(mediaQuery);
-    
     mediaQuery.addEventListener('change', handleMediaChange);
     return () => mediaQuery.removeEventListener('change', handleMediaChange);
   }, []);
 
+  /**
+   * Dersin grid pozisyonunu hesaplar (15 dk'lık grid satırları)
+   * rowStart 2'den başlar (ilk satır = başlık)
+   */
   const getGridArea = (course) => {
     const dayIndex = DAYS.indexOf(course.day);
     const startIndex = TIME_SLOTS.indexOf(course.startTime);
@@ -41,7 +38,8 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
 
     const col = dayIndex !== -1 ? dayIndex + 2 : 2;
     const rowStart = startIndex !== -1 ? startIndex + 2 : 2;
-    const rowEnd = endIndex !== -1 && endIndex > startIndex ? endIndex + 2 : rowStart + 1;
+    // endTime bulunamazsa varsayılan 4 slot (1 saat)
+    const rowEnd = endIndex !== -1 && endIndex > startIndex ? endIndex + 2 : rowStart + 4;
 
     return {
       gridColumn: col,
@@ -50,9 +48,9 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
   };
 
   const selectedDayName = DAYS[selectedDay];
-  const dayCourses = courses.filter(c => c.day === selectedDayName).sort((a, b) => {
-    return TIME_SLOTS.indexOf(a.startTime) - TIME_SLOTS.indexOf(b.startTime);
-  });
+  const dayCourses = courses
+    .filter(c => c.day === selectedDayName)
+    .sort((a, b) => TIME_SLOTS.indexOf(a.startTime) - TIME_SLOTS.indexOf(b.startTime));
 
   return (
     <div className="schedule-container relative">
@@ -63,7 +61,10 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
       ) : (
         <>
           {viewMode === 'day' && (
-            <div className="day-selector flex gap-sm overflow-x-auto pb-4 mb-4" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div
+              className="day-selector flex gap-sm overflow-x-auto pb-4 mb-4"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {DAYS.map((day, idx) => (
                 <button
                   key={day}
@@ -80,7 +81,9 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
           {courses.length === 0 ? (
             <div className="empty-state">
               <div className="text-4xl mb-4" style={{ display: 'flex', justifyContent: 'center' }}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-secondary"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-secondary">
+                  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+                </svg>
               </div>
               <h3>Henüz ders eklenmedi</h3>
               <p className="text-secondary">Sağ alttaki + butonuna tıklayarak ders ekleyin</p>
@@ -89,7 +92,7 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
             <div className="day-view-list flex-col gap-md">
               {dayCourses.length > 0 ? (
                 dayCourses.map(course => (
-                  <div key={course.id} style={{ height: 'auto', minHeight: '100px' }}>
+                  <div key={course.id} style={{ height: 'auto', minHeight: '80px' }}>
                     <CourseCard course={course} onClick={() => onCourseClick(course)} />
                   </div>
                 ))
@@ -98,42 +101,69 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
               )}
             </div>
           ) : (
-            <div className="schedule-grid">
-              {/* Boş sol üst köşe */}
-              <div className="schedule-day-header"></div>
-              
+            /* ─── Haftalık Grid ─── */
+            <div
+              className="schedule-grid"
+              style={{
+                // Her TIME_SLOT satırı SLOT_HEIGHT px
+                gridTemplateRows: `auto repeat(${TIME_SLOTS.length}, ${SLOT_HEIGHT}px)`
+              }}
+            >
+              {/* Sol üst boş köşe */}
+              <div className="schedule-day-header" style={{ gridColumn: 1, gridRow: 1 }} />
+
               {/* Gün başlıkları */}
               {DAYS.map((day, index) => (
-                <div 
-                  key={day} 
+                <div
+                  key={day}
                   className={`schedule-day-header glass-surface flex-center ${new Date().getDay() === index + 1 ? 'text-white border-white/40' : ''}`}
+                  style={{ gridColumn: index + 2, gridRow: 1 }}
                 >
                   {day}
                 </div>
               ))}
 
-              {/* Saat etiketleri ve arka plan ızgarası */}
-              {TIME_SLOTS.map((time, timeIndex) => (
-                <React.Fragment key={time}>
-                  <div 
-                    className="schedule-time-label" 
-                    style={{ gridColumn: 1, gridRow: timeIndex + 2 }}
-                  >
-                    {time}
-                  </div>
-                  {/* Izgara hücreleri */}
-                  {DAYS.map((day, dayIndex) => (
-                    <div 
-                      key={`${day}-${time}`} 
-                      className="schedule-cell"
-                      style={{ gridColumn: dayIndex + 2, gridRow: timeIndex + 2 }}
-                    />
-                  ))}
-                </React.Fragment>
-              ))}
+              {/* Saat etiketleri + ızgara hücreleri */}
+              {TIME_SLOTS.map((time, timeIndex) => {
+                const fullHour = isFullHour(time);
+                return (
+                  <React.Fragment key={time}>
+                    {/* Saat etiketi — sadece tam saatlerde */}
+                    <div
+                      className="schedule-time-label"
+                      style={{
+                        gridColumn: 1,
+                        gridRow: timeIndex + 2,
+                        opacity: fullHour ? 1 : 0,
+                        fontSize: '0.75rem',
+                        // Tam saatlerde üst sınır belirgin
+                        borderTop: fullHour ? '1px solid rgba(255,255,255,0.12)' : undefined
+                      }}
+                    >
+                      {fullHour ? time : ''}
+                    </div>
+
+                    {/* Izgara hücreleri — tam saatte daha belirgin çizgi */}
+                    {DAYS.map((day, dayIndex) => (
+                      <div
+                        key={`${day}-${time}`}
+                        className="schedule-cell"
+                        style={{
+                          gridColumn: dayIndex + 2,
+                          gridRow: timeIndex + 2,
+                          borderTop: fullHour
+                            ? '1px solid rgba(255,255,255,0.1)'
+                            : '1px solid rgba(255,255,255,0.03)',
+                          minHeight: `${SLOT_HEIGHT}px`
+                        }}
+                      />
+                    ))}
+                  </React.Fragment>
+                );
+              })}
 
               {/* Ders kartları */}
-              {courses.map((course) => (
+              {courses.map(course => (
                 <div
                   key={course.id}
                   className="schedule-course"
@@ -147,8 +177,8 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
         </>
       )}
 
-      {/* FAB - Floating Action Button */}
-      <button 
+      {/* FAB */}
+      <button
         className="glass-button-primary glass-button-icon flex-center shadow-lg"
         style={{
           position: 'fixed',
@@ -168,4 +198,3 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
     </div>
   );
 }
-

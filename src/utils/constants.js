@@ -1,9 +1,39 @@
 export const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'];
 
-export const TIME_SLOTS = [
-  '08:00', '09:00', '10:00', '11:00', '12:00', 
-  '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
-];
+/**
+ * 15 dakikalık aralıklarla saat dilimleri (08:00 - 22:00)
+ * Her slot = 15 dakika
+ */
+const generateTimeSlots = () => {
+  const slots = [];
+  for (let h = 8; h <= 21; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    }
+  }
+  slots.push('22:00');
+  return slots;
+};
+
+export const TIME_SLOTS = generateTimeSlots();
+
+/**
+ * Bir saat stringinin tam saat olup olmadığını kontrol eder
+ * @param {string} time - 'HH:MM' formatında saat
+ */
+export const isFullHour = (time) => time.endsWith(':00');
+
+/**
+ * Verilen startTime'dan 1 saat sonrasını döner
+ * @param {string} startTime - Başlangıç saati
+ * @returns {string} Bitiş saati
+ */
+export const getDefaultEndTime = (startTime) => {
+  const idx = TIME_SLOTS.indexOf(startTime);
+  // 1 saat = 4 slot (15 dk × 4)
+  const endIdx = Math.min(idx + 4, TIME_SLOTS.length - 1);
+  return TIME_SLOTS[endIdx];
+};
 
 export const COURSE_COLORS = [
   '#7c3aed', // purple
