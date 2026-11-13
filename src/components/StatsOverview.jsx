@@ -7,9 +7,17 @@ import { SEMESTER_WEEKS } from '../utils/constants'
  * Genel istatistik ve özet sayfası
  * Tüm derslerin yoklama ve ödev durumlarını gösterir
  */
-const StatsOverview = ({ courses, userId }) => {
+const StatsOverview = ({ courses, coursesLoading = false, userId }) => {
   const { attendanceByCourse, loading: attLoading } = useAllAttendance(userId, courses, SEMESTER_WEEKS)
   const { homeworkByCourse, loading: hwLoading } = useAllHomework(userId, courses)
+
+  if (coursesLoading) {
+    return (
+      <div className="flex-center" style={{ padding: 'var(--space-xl)' }}>
+        <div className="loading-spinner" />
+      </div>
+    )
+  }
 
   if (courses.length === 0) {
     return (
@@ -26,6 +34,15 @@ const StatsOverview = ({ courses, userId }) => {
 
   const isLoading = attLoading || hwLoading;
 
+  // Genel özet: tüm derslerdeki toplam katılım ve bekleyen ödevler
+  const totals = Object.values(attendanceByCourse).reduce(
+    (acc, { stats }) => ({ attended: acc.attended + stats.attended, missed: acc.missed + stats.missed }),
+    { attended: 0, missed: 0 }
+  );
+  const recorded = totals.attended + totals.missed;
+  const overallRate = recorded > 0 ? Math.round((totals.attended / recorded) * 100) : null;
+  const pendingHomework = Object.values(homeworkByCourse).flat().filter(hw => !hw.isCompleted).length;
+
   return (
     <div className="animate-fade-in">
       <h1 style={{ marginBottom: 'var(--space-lg)' }}>📊 Özet</h1>
@@ -39,14 +56,12 @@ const StatsOverview = ({ courses, userId }) => {
             <div className="stat-label">Toplam Ders</div>
           </div>
           <div className="stat-card">
-            <div className="stat-number">{SEMESTER_WEEKS}</div>
-            <div className="stat-label">Hafta</div>
+            <div className="stat-number">{isLoading || overallRate === null ? '—' : `%${overallRate}`}</div>
+            <div className="stat-label">Genel Devam</div>
           </div>
           <div className="stat-card">
-            <div className="stat-number">
-              {courses.length * SEMESTER_WEEKS}
-            </div>
-            <div className="stat-label">Toplam Oturum</div>
+            <div className="stat-number">{isLoading ? '—' : pendingHomework}</div>
+            <div className="stat-label">Bekleyen Ödev</div>
           </div>
         </div>
       </div>

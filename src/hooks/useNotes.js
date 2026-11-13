@@ -21,6 +21,8 @@ export const useNotes = (userId, courseId) => {
       return;
     }
 
+    setLoading(true);
+    setError(null);
     const q = query(collection(db, `users/${userId}/courses/${courseId}/weeklyNotes`));
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {

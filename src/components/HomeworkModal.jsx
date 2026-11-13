@@ -74,7 +74,8 @@ export default function HomeworkModal({ isOpen, onClose, onSave, homework }) {
   if (!isOpen) return null;
 
   /* Today's date for min-date validation */
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -85,7 +86,7 @@ export default function HomeworkModal({ isOpen, onClose, onSave, homework }) {
     setTitleError('');
     setSaving(true);
     try {
-      await onSave({ title, description, dueDate });
+      await onSave({ title: title.trim(), description: description.trim(), dueDate });
     } finally {
       setSaving(false);
     }

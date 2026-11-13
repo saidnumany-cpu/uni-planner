@@ -22,6 +22,8 @@ export const useHomework = (userId, courseId) => {
       return;
     }
 
+    setLoading(true);
+    setError(null);
     const q = query(
       collection(db, `users/${userId}/courses/${courseId}/homework`),
       orderBy('dueDate', 'asc')

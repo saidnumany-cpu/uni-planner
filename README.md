@@ -1,16 +1,27 @@
-# React + Vite
+# UniPlanner — Ders Programı & Not Takibi
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Üniversite ders programı, haftalık notlar, ödev takibi ve yoklama yönetimi için PWA.
+React 19 + Vite + Firebase (Auth + Firestore).
 
-Currently, two official plugins are available:
+## Geliştirme
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev     # geliştirme sunucusu
+npm run build   # üretim derlemesi
+npm run lint    # oxlint
+```
 
-## React Compiler
+Firebase ayarları `.env` dosyasından okunur (`.env.example`'a bakın).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Firebase / Vercel notları
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+- **Authorized domains:** Firebase Console → Authentication → Settings → Authorized domains
+  listesine Vercel alan adınızı (örn. `uni-planner-xi.vercel.app`) ekleyin.
+- **Firestore kuralları:** `firestore.rules` dosyasını Firebase Console'a yayınlayın
+  (her kullanıcı yalnızca `users/{uid}` altındaki verisine erişebilir).
+- **Safari / iOS'ta giriş sorunu (isteğe bağlı):** `vercel.json`, `/__/auth/*` isteklerini
+  Firebase'e yönlendirir. Redirect ile girişin Safari'de de çalışması için:
+  1. Google Cloud Console → APIs & Services → Credentials → OAuth istemcisine
+     `https://<alan-adınız>/__/auth/handler` adresini *Authorized redirect URI* olarak ekleyin.
+  2. Vercel ortam değişkeni `VITE_FIREBASE_AUTH_DOMAIN=<alan-adınız>` olarak ayarlayın ve yeniden deploy edin.

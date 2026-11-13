@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { 
-  collection, query, onSnapshot, addDoc, 
-  updateDoc, deleteDoc, doc, serverTimestamp 
+import {
+  collection, query, onSnapshot, addDoc,
+  updateDoc, doc, serverTimestamp, getDocs, writeBatch
 } from 'firebase/firestore';
+
+// Bir derse ait alt koleksiyonlar — ders silinirken bunlar da silinmeli,
+// çünkü Firestore bir dokümanı silince alt koleksiyonlarını otomatik silmez.
+const COURSE_SUBCOLLECTIONS = ['homework', 'attendance', 'weeklyNotes'];
 
 /**
  * Ders işlemleri için custom hook
@@ -21,6 +25,8 @@ export const useCourses = (userId) => {
       return;
     }
 
+    setLoading(true);
+    setError(null);
     const q = query(collection(db, `users/${userId}/courses`));
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
@@ -62,8 +68,21 @@ export const useCourses = (userId) => {
 
   const deleteCourse = async (courseId) => {
     if (!userId) throw new Error('Kullanıcı girişi gerekli');
-    const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
-    await deleteDoc(courseRef);
+    const coursePath = `users/${userId}/courses/${courseId}`;
+
+    // Alt koleksiyonlardaki tüm dokümanları topla
+    const snapshots = await Promise.all(
+      COURSE_SUBCOLLECTIONS.map(name => getDocs(collection(db, `${coursePath}/${name}`)))
+    );
+    const refs = snapshots.flatMap(snap => snap.docs.map(d => d.ref));
+    refs.push(doc(db, coursePath));
+
+    // writeBatch en fazla 500 işlem alır — parçalara böl
+    for (let i = 0; i < refs.length; i += 450) {
+      const batch = writeBatch(db);
+      refs.slice(i, i + 450).forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
   };
 
   return { courses, loading, error, addCourse, updateCourse, deleteCourse };

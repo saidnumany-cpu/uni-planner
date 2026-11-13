@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import useAttendance from '../hooks/useAttendance';
 import { SEMESTER_WEEKS } from '../utils/constants';
+import { runInBackground } from '../utils/toast';
 import { CheckIcon, XIcon, CalendarIcon } from '../icons/SVGIcons';
 
 /**
@@ -26,27 +27,34 @@ export default function AttendanceTracker({ userId, courseId }) {
     return record?.note || '';
   };
 
-  const handleToggle = async (weekNumber) => {
+  const handleToggle = (weekNumber) => {
     const currentStatus = getWeekStatus(weekNumber);
     
     if (currentStatus === 'unrecorded') {
-      await toggleAttendance(weekNumber, true, '');
+      runInBackground(toggleAttendance(weekNumber, true, ''), 'Yoklama kaydedilemedi');
     } else if (currentStatus === 'attended') {
       setSelectedWeek(weekNumber);
       setMissedNote('');
       setNoteModalOpen(true);
     } else {
-      await toggleAttendance(weekNumber, null, '');
+      runInBackground(toggleAttendance(weekNumber, null, ''), 'Yoklama kaydedilemedi');
     }
   };
 
-  const handleSaveMissedNote = async () => {
+  const handleSaveMissedNote = () => {
     if (selectedWeek) {
-      await toggleAttendance(selectedWeek, false, missedNote);
+      runInBackground(toggleAttendance(selectedWeek, false, missedNote.trim()), 'Yoklama kaydedilemedi');
     }
     setNoteModalOpen(false);
     setSelectedWeek(null);
   };
+
+  useEffect(() => {
+    if (!noteModalOpen) return;
+    const onKey = (e) => { if (e.key === 'Escape') setNoteModalOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [noteModalOpen]);
 
   if (loading) {
     return (

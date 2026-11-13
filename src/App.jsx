@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAuth } from './contexts/AuthContext'
 import { useCourses } from './hooks/useCourses'
 import LoginScreen from './components/LoginScreen'
@@ -9,6 +9,8 @@ import CourseDetail from './components/CourseDetail'
 import CourseModal from './components/CourseModal'
 import HomeworkOverview from './components/HomeworkOverview'
 import StatsOverview from './components/StatsOverview'
+import Toast from './components/Toast'
+import { runInBackground } from './utils/toast'
 
 /* Shared background orbs — rendered once, not duplicated */
 function BackgroundOrbs() {
@@ -36,57 +38,53 @@ function parseHash(hash) {
 function App() {
   const { user, loading: authLoading } = useAuth()
   const { courses, loading: coursesLoading, addCourse, updateCourse, deleteCourse } = useCourses(user?.uid)
-  
-  const [activeTab, setActiveTab] = useState(() => parseHash(window.location.hash).tab)
-  const [selectedCourse, setSelectedCourse] = useState(null)
+
+  const initialRoute = parseHash(window.location.hash)
+  const [activeTab, setActiveTab] = useState(initialRoute.tab)
+  // Sadece seçili dersin ID'sini tutuyoruz; ders verisi her zaman canlı `courses`
+  // listesinden okunur. Böylece düzenleme/silme sonrası eski (bayat) veri gösterilmez.
+  const [selectedCourseId, setSelectedCourseId] = useState(initialRoute.courseId)
   const [courseModalOpen, setCourseModalOpen] = useState(false)
   const [editingCourse, setEditingCourse] = useState(null)
 
-  // Use a ref to track the selected course ID for the deep-link effect
-  // This avoids selectedCourse object as a dependency (which causes infinite loops)
-  const selectedCourseIdRef = useRef(null)
-  selectedCourseIdRef.current = selectedCourse?.id ?? null
+  const selectedCourse = selectedCourseId
+    ? courses.find(c => c.id === selectedCourseId) || null
+    : null
 
-  /* Deep linking: sync hash → state */
+  /* Deep linking: hash → state (tarayıcı geri/ileri tuşları dahil) */
   useEffect(() => {
     function onHashChange() {
       const { tab, courseId } = parseHash(window.location.hash)
       setActiveTab(tab)
-      if (courseId && courses.length > 0) {
-        const course = courses.find(c => c.id === courseId)
-        if (course) setSelectedCourse(course)
-      } else if (!courseId) {
-        setSelectedCourse(null)
-      }
+      setSelectedCourseId(courseId)
     }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
-  }, [courses])
+  }, [])
 
-  /* Restore deep-linked course once courses load — only runs when courses list changes */
+  /* Seçili ders artık yoksa (silindiyse / geçersiz link) programa dön */
   useEffect(() => {
-    if (courses.length > 0 && !selectedCourseIdRef.current) {
-      const { courseId } = parseHash(window.location.hash)
-      if (courseId) {
-        const course = courses.find(c => c.id === courseId)
-        if (course) setSelectedCourse(course)
+    if (selectedCourseId && !coursesLoading && !courses.some(c => c.id === selectedCourseId)) {
+      setSelectedCourseId(null)
+      if (window.location.hash.startsWith('#course/')) {
+        window.history.replaceState(null, '', '#schedule')
       }
     }
-  }, [courses])
+  }, [selectedCourseId, courses, coursesLoading])
 
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab)
-    setSelectedCourse(null)
+    setSelectedCourseId(null)
     window.location.hash = tab
   }, [])
 
   const handleCourseClick = useCallback((course) => {
-    setSelectedCourse(course)
+    setSelectedCourseId(course.id)
     window.location.hash = `course/${course.id}`
   }, [])
 
   const handleBackToSchedule = useCallback(() => {
-    setSelectedCourse(null)
+    setSelectedCourseId(null)
     window.location.hash = activeTab
   }, [activeTab])
 
@@ -100,29 +98,40 @@ function App() {
     setCourseModalOpen(true)
   }, [])
 
-  const handleSaveCourse = useCallback(async (courseData) => {
-    if (editingCourse) {
-      await updateCourse(editingCourse.id, courseData)
-      // Update selected course if we're editing the currently viewed one
-      if (selectedCourse && selectedCourse.id === editingCourse.id) {
-        setSelectedCourse({ ...selectedCourse, ...courseData })
-      }
-    } else {
-      await addCourse(courseData)
-    }
+  const closeCourseModal = useCallback(() => {
     setCourseModalOpen(false)
     setEditingCourse(null)
-  }, [editingCourse, addCourse, updateCourse, selectedCourse])
+  }, [])
 
-  const handleDeleteCourse = useCallback(async (courseId) => {
-    await deleteCourse(courseId)
-    setCourseModalOpen(false)
-    setEditingCourse(null)
-    if (selectedCourse && selectedCourse.id === courseId) {
-      setSelectedCourse(null)
+  const handleSaveCourse = useCallback((courseData) => {
+    // Firestore değişikliği yerelde anında uygular; sunucu onayını beklemeden
+    // modalı kapatıyoruz (çevrimdışıyken onay hiç gelmeyebilir).
+    if (editingCourse) {
+      runInBackground(updateCourse(editingCourse.id, courseData), 'Ders güncellenemedi')
+    } else {
+      runInBackground(addCourse(courseData), 'Ders eklenemedi')
+    }
+    closeCourseModal()
+  }, [editingCourse, addCourse, updateCourse, closeCourseModal])
+
+  const handleDeleteCourse = useCallback((courseId) => {
+    runInBackground(deleteCourse(courseId), 'Ders silinemedi')
+    closeCourseModal()
+    if (selectedCourseId === courseId) {
+      setSelectedCourseId(null)
       window.location.hash = 'schedule'
     }
-  }, [deleteCourse, selectedCourse])
+  }, [deleteCourse, selectedCourseId, closeCourseModal])
+
+  const courseModal = (
+    <CourseModal
+      isOpen={courseModalOpen}
+      onClose={closeCourseModal}
+      onSave={handleSaveCourse}
+      onDelete={handleDeleteCourse}
+      course={editingCourse}
+    />
+  )
 
   // Auth loading state
   if (authLoading) {
@@ -140,7 +149,18 @@ function App() {
       <>
         <BackgroundOrbs />
         <LoginScreen />
+        <Toast />
       </>
+    )
+  }
+
+  // Deep-link ile açılan ders henüz yüklenmediyse bekle
+  if (selectedCourseId && !selectedCourse && coursesLoading) {
+    return (
+      <div className="app-loading">
+        <BackgroundOrbs />
+        <div className="loading-spinner" aria-label="Yükleniyor" />
+      </div>
     )
   }
 
@@ -159,13 +179,8 @@ function App() {
           />
         </main>
         <Navigation activeTab={activeTab} onTabChange={handleTabChange} />
-        <CourseModal
-          isOpen={courseModalOpen}
-          onClose={() => { setCourseModalOpen(false); setEditingCourse(null) }}
-          onSave={handleSaveCourse}
-          onDelete={handleDeleteCourse}
-          course={editingCourse}
-        />
+        {courseModal}
+        <Toast />
       </>
     )
   }
@@ -187,24 +202,21 @@ function App() {
         {activeTab === 'homework' && (
           <HomeworkOverview
             courses={courses}
+            coursesLoading={coursesLoading}
             userId={user.uid}
           />
         )}
         {activeTab === 'stats' && (
           <StatsOverview
             courses={courses}
+            coursesLoading={coursesLoading}
             userId={user.uid}
           />
         )}
       </main>
       <Navigation activeTab={activeTab} onTabChange={handleTabChange} />
-      <CourseModal
-        isOpen={courseModalOpen}
-        onClose={() => { setCourseModalOpen(false); setEditingCourse(null) }}
-        onSave={handleSaveCourse}
-        onDelete={handleDeleteCourse}
-        course={editingCourse}
-      />
+      {courseModal}
+      <Toast />
     </>
   )
 }

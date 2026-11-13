@@ -28,6 +28,8 @@ export const useAllHomework = (userId, courses) => {
     }
 
     setLoading(true);
+    // Silinen derslerin eski verileri kalmasın
+    setHomeworkByCourse({});
     const unsubscribes = [];
     // Track per-course load state with an object to avoid stale closure on a counter
     const loadedMap = {};

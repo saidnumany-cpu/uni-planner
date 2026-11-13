@@ -18,20 +18,15 @@ const ConfirmDialog = ({
   const modalRef = useRef(null);
 
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      // Auto-focus cancel button on open (safe default)
-      setTimeout(() => {
-        if (cancelBtnRef.current) {
-          cancelBtnRef.current.focus();
-        }
-      }, 50);
-    } else {
-      document.body.style.overflow = '';
-    }
-
+    if (!isOpen) return;
+    // Önceki değeri sakla: başka bir modalın üstünde açıldıysa kapanınca onu bozma
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    // Auto-focus cancel button on open (safe default)
+    const t = setTimeout(() => cancelBtnRef.current?.focus(), 50);
     return () => {
-      document.body.style.overflow = '';
+      clearTimeout(t);
+      document.body.style.overflow = prevOverflow;
     };
   }, [isOpen]);
 

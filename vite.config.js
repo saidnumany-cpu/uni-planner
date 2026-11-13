@@ -29,7 +29,7 @@ export default defineConfig({
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'maskable-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
@@ -37,6 +37,8 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Firebase auth yönlendirme sayfaları SPA'ya düşmesin
+        navigateFallbackDenylist: [/^\/__\//],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
@@ -72,22 +74,15 @@ export default defineConfig({
     })
   ],
   build: {
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('firebase')) {
-              return 'vendor-firebase';
-            }
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-            return 'vendor';
+          if (id.includes('node_modules') && /[\\/]@?firebase[\\/]/.test(id)) {
+            return 'vendor-firebase';
           }
         }
       }
     }
   }
 })
-

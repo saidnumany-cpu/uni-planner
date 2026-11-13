@@ -14,11 +14,13 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    // Handle redirect result if user used redirect sign-in
+    // Redirect ile giriş yapıldıysa sonucu kontrol et; hata varsa giriş ekranında göster
     getRedirectResult(auth).catch((error) => {
       console.warn('Redirect sign-in result check:', error);
+      setAuthError(error);
     });
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -44,7 +46,11 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error signing in with Google Popup:', error);
       // If popup is blocked by browser, attempt redirect
-      if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request') {
+      // Popup engellendiyse veya bu ortam (örn. iOS ana ekran uygulaması) popup desteklemiyorsa
+      if (
+        error.code === 'auth/popup-blocked' ||
+        error.code === 'auth/operation-not-supported-in-this-environment'
+      ) {
         console.info('Popup blocked/cancelled, attempting signInWithRedirect...');
         return await signInWithRedirect(auth, provider);
       }
@@ -74,6 +80,8 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     loading,
+    authError,
+    clearAuthError: () => setAuthError(null),
     signInWithGoogle,
     signInWithGoogleRedirect,
     signOut,

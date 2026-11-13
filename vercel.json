@@ -1,5 +1,9 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/__/auth/:path*", "destination": "https://ders-takibi-e06bc.firebaseapp.com/__/auth/:path*" },
+    { "source": "/__/firebase/:path*", "destination": "https://ders-takibi-e06bc.firebaseapp.com/__/firebase/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "build": {
     "env": {
       "NODE_VERSION": "20"

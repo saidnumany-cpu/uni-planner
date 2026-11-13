@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleIcon } from '../icons/SVGIcons';
 
@@ -6,7 +6,7 @@ import { GoogleIcon } from '../icons/SVGIcons';
  * Kullanıcı giriş ekranı
  */
 const LoginScreen = () => {
-  const { signInWithGoogle, signInWithGoogleRedirect } = useAuth();
+  const { signInWithGoogle, signInWithGoogleRedirect, authError, clearAuthError } = useAuth();
   const [error, setError] = useState('');
   const [errorDetail, setErrorDetail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +17,7 @@ const LoginScreen = () => {
     if (code === 'auth/unauthorized-domain') {
       return {
         title: 'Bu alan adı (domain) yetkilendirilmemiş.',
-        detail: 'Firebase Console > Authentication > Settings > Authorized domains bölümüne "uni-planner-xi.vercel.app" eklenmelidir.'
+        detail: `Firebase Console > Authentication > Settings > Authorized domains bölümüne "${window.location.hostname}" eklenmelidir.`
       };
     }
     if (code === 'auth/popup-blocked') {
@@ -50,6 +50,17 @@ const LoginScreen = () => {
     };
   };
 
+  // Redirect dönüşünde oluşan hatayı göster
+  useEffect(() => {
+    if (!authError) return;
+    const parsed = getErrorMessage(authError);
+    setError(parsed.title);
+    setErrorDetail(parsed.detail);
+    setShowRedirectOption(false);
+    clearAuthError();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authError]);
+
   const handleLogin = async () => {
     try {
       setError('');
@@ -61,7 +72,7 @@ const LoginScreen = () => {
       const parsed = getErrorMessage(err);
       setError(parsed.title);
       setErrorDetail(parsed.detail);
-      if (err?.code === 'auth/popup-blocked' || err?.code === 'auth/cancelled-popup-request') {
+      if (['auth/popup-blocked', 'auth/cancelled-popup-request', 'auth/popup-closed-by-user'].includes(err?.code)) {
         setShowRedirectOption(true);
       }
     } finally {

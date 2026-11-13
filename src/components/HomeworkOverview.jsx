@@ -2,14 +2,25 @@ import { useState } from 'react'
 import { useAllHomework } from '../hooks/useAllHomework'
 import HomeworkModal from './HomeworkModal'
 import EmptyState from './EmptyState'
-import { getDueDateStatus } from '../utils/helpers'
+import ConfirmDialog from './ConfirmDialog'
+import { getDueDateStatus, parseLocalDate } from '../utils/helpers'
+import { runInBackground } from '../utils/toast'
+
+const byDueDate = (a, b) => {
+  const da = parseLocalDate(a.dueDate)
+  const db = parseLocalDate(b.dueDate)
+  if (!da && !db) return 0
+  if (!da) return 1
+  if (!db) return -1
+  return da - db
+}
 
 /**
  * Tüm dersler için ödev genel görünümü
  * Tüm aktif ödevleri tek bir listede gösterir
  */
-const HomeworkOverview = ({ courses, userId }) => {
-  const { homeworkByCourse, loading, addHomework, toggleComplete, deleteHomework } = useAllHomework(userId, courses)
+const HomeworkOverview = ({ courses, coursesLoading = false, userId }) => {
+  const { homeworkByCourse, loading, addHomework, updateHomework, toggleComplete, deleteHomework } = useAllHomework(userId, courses)
 
   return (
     <div className="animate-fade-in">
@@ -17,7 +28,11 @@ const HomeworkOverview = ({ courses, userId }) => {
         <h1>📝 Ödevler</h1>
       </div>
 
-      {courses.length === 0 ? (
+      {coursesLoading ? (
+        <div className="flex-center" style={{ padding: 'var(--space-xl)' }}>
+          <div className="loading-spinner" />
+        </div>
+      ) : courses.length === 0 ? (
         <EmptyState
           icon="📝"
           title="Henüz ders eklenmedi"
@@ -34,9 +49,10 @@ const HomeworkOverview = ({ courses, userId }) => {
               key={course.id}
               course={course}
               homework={homeworkByCourse[course.id] || []}
-              onAdd={(data) => addHomework(course.id, data)}
-              onToggle={(hwId, state) => toggleComplete(course.id, hwId, state)}
-              onDelete={(hwId) => deleteHomework(course.id, hwId)}
+              onAdd={(data) => runInBackground(addHomework(course.id, data), 'Ödev eklenemedi')}
+              onUpdate={(hwId, data) => runInBackground(updateHomework(course.id, hwId, data), 'Ödev güncellenemedi')}
+              onToggle={(hwId, state) => runInBackground(toggleComplete(course.id, hwId, state), 'Ödev güncellenemedi')}
+              onDelete={(hwId) => runInBackground(deleteHomework(course.id, hwId), 'Ödev silinemedi')}
             />
           ))}
         </div>
@@ -46,10 +62,16 @@ const HomeworkOverview = ({ courses, userId }) => {
 }
 
 /** Tek bir ders için ödev bölümü */
-const CourseHomeworkSection = ({ course, homework, onAdd, onToggle, onDelete }) => {
+const CourseHomeworkSection = ({ course, homework, onAdd, onUpdate, onToggle, onDelete }) => {
   const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [toDelete, setToDelete] = useState(null)
 
-  const activeHomework = homework.filter(hw => !hw.isCompleted)
+  const openNew = () => { setEditing(null); setModalOpen(true) }
+  const openEdit = (hw) => { setEditing(hw); setModalOpen(true) }
+  const closeModal = () => { setModalOpen(false); setEditing(null) }
+
+  const activeHomework = homework.filter(hw => !hw.isCompleted).sort(byDueDate)
   const completedHomework = homework.filter(hw => hw.isCompleted)
 
   const getDueDateLabel = (dueDate) => {
@@ -78,8 +100,9 @@ const CourseHomeworkSection = ({ course, homework, onAdd, onToggle, onDelete }) 
         </div>
         <button
           className="glass-button glass-button-icon"
-          onClick={() => setModalOpen(true)}
+          onClick={openNew}
           title="Ödev Ekle"
+          aria-label={`${course.name} dersine ödev ekle`}
         >
           +
         </button>
@@ -100,8 +123,15 @@ const CourseHomeworkSection = ({ course, homework, onAdd, onToggle, onDelete }) 
                     className="attendance-toggle"
                     onClick={() => onToggle(hw.id, hw.isCompleted)}
                     title="Tamamla"
+                    aria-label={`${hw.title} ödevini tamamla`}
                   />
-                  <div style={{ flex: 1 }}>
+                  <div
+                    style={{ flex: 1, cursor: 'pointer' }}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openEdit(hw)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') openEdit(hw) }}
+                  >
                     <div className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 500 }}>{hw.title}</span>
                       {dueBadge && <span className={dueBadge.className}>{dueBadge.text}</span>}
@@ -115,11 +145,7 @@ const CourseHomeworkSection = ({ course, homework, onAdd, onToggle, onDelete }) 
                 </div>
                 <button
                   className="glass-button glass-button-icon text-tertiary"
-                  onClick={() => {
-                    if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
-                      onDelete(hw.id)
-                    }
-                  }}
+                  onClick={() => setToDelete(hw)}
                   title="Sil"
                   aria-label={`${hw.title} ödevini sil`}
                   style={{ fontSize: '0.85rem' }}
@@ -142,6 +168,7 @@ const CourseHomeworkSection = ({ course, homework, onAdd, onToggle, onDelete }) 
                       className="attendance-toggle checked"
                       onClick={() => onToggle(hw.id, hw.isCompleted)}
                       title="Geri Al"
+                      aria-label={`${hw.title} ödevini geri al`}
                     />
                     <span style={{ fontWeight: 400, textDecoration: 'line-through', opacity: 0.5 }}>
                       {hw.title}
@@ -149,11 +176,7 @@ const CourseHomeworkSection = ({ course, homework, onAdd, onToggle, onDelete }) 
                   </div>
                   <button
                     className="glass-button glass-button-icon text-tertiary"
-                    onClick={() => {
-                      if (window.confirm('Bu ödevi silmek istediğinizden emin misiniz?')) {
-                        onDelete(hw.id)
-                      }
-                    }}
+                    onClick={() => setToDelete(hw)}
                     title="Sil"
                     aria-label={`${hw.title} ödevini sil`}
                     style={{ fontSize: '0.85rem' }}
@@ -169,12 +192,24 @@ const CourseHomeworkSection = ({ course, homework, onAdd, onToggle, onDelete }) 
 
       <HomeworkModal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={async (data) => {
-          await onAdd(data)
-          setModalOpen(false)
+        onClose={closeModal}
+        onSave={(data) => {
+          if (editing) onUpdate(editing.id, data)
+          else onAdd(data)
+          closeModal()
         }}
-        homework={null}
+        homework={editing}
+      />
+
+      <ConfirmDialog
+        isOpen={!!toDelete}
+        title="Ödevi Sil"
+        message={`"${toDelete?.title || ''}" ödevini silmek istediğinizden emin misiniz?`}
+        onConfirm={() => { onDelete(toDelete.id); setToDelete(null) }}
+        onCancel={() => setToDelete(null)}
+        confirmText="Sil"
+        cancelText="İptal"
+        variant="danger"
       />
     </div>
   )

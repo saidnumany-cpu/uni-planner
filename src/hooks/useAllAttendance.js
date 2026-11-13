@@ -28,6 +28,8 @@ export const useAllAttendance = (userId, courses, totalWeeks = SEMESTER_WEEKS) =
     }
 
     setLoading(true);
+    // Silinen derslerin eski verileri kalmasın
+    setAttendanceDataByCourse({});
     const unsubscribes = [];
     // Track per-course load state with an object to avoid stale closure on a counter
     const loadedMap = {};

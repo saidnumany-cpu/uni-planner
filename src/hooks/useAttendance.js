@@ -23,6 +23,8 @@ export const useAttendance = (userId, courseId, totalWeeks = SEMESTER_WEEKS) => 
       return;
     }
 
+    setLoading(true);
+    setError(null);
     const q = query(collection(db, `users/${userId}/courses/${courseId}/attendance`));
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {

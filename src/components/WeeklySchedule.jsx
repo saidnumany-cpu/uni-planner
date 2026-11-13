@@ -7,6 +7,12 @@ import { PlusIcon } from '../icons/SVGIcons';
 // Daha okunaklı bir grid için: 1 slot = 16px → 1 saat = 64px
 const SLOT_HEIGHT = 16; // px per 15-min slot
 
+const toMinutes = (time) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(time || '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+const GRID_START_MIN = toMinutes(TIME_SLOTS[0]);
+
 /**
  * Ana haftalık program görünümü
  */
@@ -33,13 +39,22 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
    */
   const getGridArea = (course) => {
     const dayIndex = DAYS.indexOf(course.day);
-    const startIndex = TIME_SLOTS.indexOf(course.startTime);
-    const endIndex = TIME_SLOTS.indexOf(course.endTime);
+    // Saati dakikaya çevirip en yakın 15 dk'lık satıra yerleştir.
+    // (indexOf kullanılınca 09:10 gibi listede olmayan saatler en üste kayıyordu.)
+    const lastRow = TIME_SLOTS.length + 2;
+    const toRow = (time, roundUp) => {
+      const mins = toMinutes(time);
+      if (mins === null) return null;
+      const slot = (mins - GRID_START_MIN) / 15;
+      const idx = roundUp ? Math.ceil(slot) : Math.floor(slot);
+      return Math.min(Math.max(idx + 2, 2), lastRow);
+    };
 
     const col = dayIndex !== -1 ? dayIndex + 2 : 2;
-    const rowStart = startIndex !== -1 ? startIndex + 2 : 2;
-    // endTime bulunamazsa varsayılan 4 slot (1 saat)
-    const rowEnd = endIndex !== -1 && endIndex > startIndex ? endIndex + 2 : rowStart + 4;
+    const rowStart = Math.min(toRow(course.startTime, false) ?? 2, lastRow - 1);
+    const endRow = toRow(course.endTime, true);
+    // endTime yoksa / hatalıysa varsayılan 4 slot (1 saat)
+    const rowEnd = endRow && endRow > rowStart ? endRow : Math.min(rowStart + 4, lastRow);
 
     return {
       gridColumn: col,
@@ -47,10 +62,44 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
     };
   };
 
+  /**
+   * Aynı gün çakışan dersleri yan yana sıralamak için şerit (lane) hesabı.
+   * Dönüş: { [courseId]: { lane, lanes } }
+   */
+  const layout = {};
+  DAYS.forEach(day => {
+    const list = courses
+      .filter(c => c.day === day)
+      .map(c => {
+        const start = toMinutes(c.startTime) ?? 0;
+        const end = toMinutes(c.endTime);
+        return { id: c.id, start, end: end && end > start ? end : start + 60 };
+      })
+      .sort((a, b) => a.start - b.start || a.end - b.end);
+
+    let group = [];
+    let groupEnd = -1;
+    const closeGroup = () => {
+      const lanes = Math.max(1, ...group.map(g => g.lane + 1));
+      group.forEach(g => { layout[g.id] = { lane: g.lane, lanes }; });
+      group = [];
+    };
+    list.forEach(item => {
+      if (group.length && item.start >= groupEnd) closeGroup();
+      const laneEnds = [];
+      group.forEach(g => { laneEnds[g.lane] = Math.max(laneEnds[g.lane] ?? 0, g.end); });
+      let lane = laneEnds.findIndex(e => e <= item.start);
+      if (lane === -1) lane = laneEnds.length;
+      group.push({ ...item, lane });
+      groupEnd = Math.max(groupEnd, item.end);
+    });
+    if (group.length) closeGroup();
+  });
+
   const selectedDayName = DAYS[selectedDay];
   const dayCourses = courses
     .filter(c => c.day === selectedDayName)
-    .sort((a, b) => TIME_SLOTS.indexOf(a.startTime) - TIME_SLOTS.indexOf(b.startTime));
+    .sort((a, b) => (toMinutes(a.startTime) ?? 0) - (toMinutes(b.startTime) ?? 0));
 
   return (
     <div className="schedule-container relative">
@@ -68,7 +117,8 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
               {DAYS.map((day, idx) => (
                 <button
                   key={day}
-                  className={`glass-button flex-shrink-0 ${selectedDay === idx ? 'bg-white/10 shadow-inner text-white border-white/30' : 'text-secondary'}`}
+                  className={`glass-button flex-shrink-0 ${selectedDay === idx ? 'text-white' : 'text-secondary'}`}
+                  aria-pressed={selectedDay === idx}
                   onClick={() => setSelectedDay(idx)}
                   style={selectedDay === idx ? { background: 'var(--glass-bg-active)' } : {}}
                 >
@@ -116,7 +166,7 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
               {DAYS.map((day, index) => (
                 <div
                   key={day}
-                  className={`schedule-day-header glass-surface flex-center ${new Date().getDay() === index + 1 ? 'text-white border-white/40' : ''}`}
+                  className={`schedule-day-header glass-surface flex-center ${new Date().getDay() === index + 1 ? 'text-white' : ''}`}
                   style={{ gridColumn: index + 2, gridRow: 1 }}
                 >
                   {day}
@@ -167,7 +217,13 @@ export default function WeeklySchedule({ courses = [], loading = false, onCourse
                 <div
                   key={course.id}
                   className="schedule-course"
-                  style={{ ...getGridArea(course) }}
+                  style={{
+                    ...getGridArea(course),
+                    ...(layout[course.id]?.lanes > 1 ? {
+                      width: `calc(${100 / layout[course.id].lanes}% - 2px)`,
+                      marginLeft: `${(100 / layout[course.id].lanes) * layout[course.id].lane}%`
+                    } : {})
+                  }}
                 >
                   <CourseCard course={course} onClick={() => onCourseClick(course)} />
                 </div>

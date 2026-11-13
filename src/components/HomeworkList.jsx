@@ -3,6 +3,7 @@ import useHomework from '../hooks/useHomework';
 import HomeworkModal from './HomeworkModal';
 import ConfirmDialog from './ConfirmDialog';
 import { getDueDateStatus } from '../utils/helpers';
+import { runInBackground } from '../utils/toast';
 import { TrashIcon, ClipboardIcon, PlusIcon } from '../icons/SVGIcons';
 
 /**
@@ -31,11 +32,11 @@ export default function HomeworkList({ userId, courseId }) {
     setIsModalOpen(false);
   };
 
-  const handleSave = async (data) => {
+  const handleSave = (data) => {
     if (editingHomework) {
-      await updateHomework(editingHomework.id, data);
+      runInBackground(updateHomework(editingHomework.id, data), 'Ödev güncellenemedi');
     } else {
-      await addHomework(data);
+      runInBackground(addHomework(data), 'Ödev eklenemedi');
     }
     handleCloseModal();
   };
@@ -60,7 +61,7 @@ export default function HomeworkList({ userId, courseId }) {
 
   const handleConfirmDelete = () => {
     if (confirmDialog.homeworkId) {
-      deleteHomework(confirmDialog.homeworkId);
+      runInBackground(deleteHomework(confirmDialog.homeworkId), 'Ödev silinemedi');
     }
     setConfirmDialog({ isOpen: false, homeworkId: null, title: '' });
   };
@@ -104,13 +105,20 @@ export default function HomeworkList({ userId, courseId }) {
                       id={`hw-check-${hw.id}`}
                       className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
                       checked={hw.isCompleted}
-                      onChange={() => toggleComplete(hw.id, hw.isCompleted)}
+                      onChange={() => runInBackground(toggleComplete(hw.id, hw.isCompleted), 'Ödev güncellenemedi')}
                       aria-label={`${hw.title} ödevini tamamla`}
                     />
                   </div>
-                  <div className="flex-1 cursor-pointer" onClick={() => handleOpenModal(hw)}>
+                  <div
+                    className="flex-1 cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleOpenModal(hw)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenModal(hw); }}
+                    aria-label={`${hw.title} ödevini düzenle`}
+                  >
                     <div className="flex-between mb-1">
-                      <label htmlFor={`hw-check-${hw.id}`} className="homework-title font-semibold cursor-pointer">{hw.title}</label>
+                      <span className="homework-title font-semibold">{hw.title}</span>
                       {getUrgencyBadge(hw.dueDate)}
                     </div>
                     {hw.description && (
@@ -141,13 +149,20 @@ export default function HomeworkList({ userId, courseId }) {
                       id={`hw-check-completed-${hw.id}`}
                       className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
                       checked={hw.isCompleted}
-                      onChange={() => toggleComplete(hw.id, hw.isCompleted)}
+                      onChange={() => runInBackground(toggleComplete(hw.id, hw.isCompleted), 'Ödev güncellenemedi')}
                       aria-label={`${hw.title} ödevini geri al`}
                     />
                   </div>
-                  <div className="flex-1 cursor-pointer" onClick={() => handleOpenModal(hw)}>
+                  <div
+                    className="flex-1 cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleOpenModal(hw)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenModal(hw); }}
+                    aria-label={`${hw.title} ödevini düzenle`}
+                  >
                     <div className="flex-between mb-1">
-                      <label htmlFor={`hw-check-completed-${hw.id}`} className="homework-title font-semibold text-secondary cursor-pointer">{hw.title}</label>
+                      <span className="homework-title font-semibold text-secondary" style={{ textDecoration: 'line-through' }}>{hw.title}</span>
                     </div>
                   </div>
                   <button 
@@ -183,7 +198,7 @@ export default function HomeworkList({ userId, courseId }) {
           onCancel={handleCancelDelete}
           confirmText="Sil"
           cancelText="İptal"
-          isDestructive={true}
+          variant="danger"
         />
       )}
     </div>

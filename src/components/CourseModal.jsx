@@ -24,7 +24,12 @@ const COLOR_LABELS = {
 function TimeSelect({ id, name, value, onChange, className, ariaRequired, ariaInvalid, ariaDescribedby }) {
   // Saate göre grupla: { '08': ['08:00','08:15','08:30','08:45'], ... }
   const groups = {};
-  TIME_SLOTS.forEach(slot => {
+  // Eski kayıtlarda 15 dk aralığına uymayan bir saat olabilir (örn. 09:10) —
+  // seçili değer listede yoksa ekle ki select yanlış değeri göstermesin.
+  const slots = value && !TIME_SLOTS.includes(value)
+    ? [...TIME_SLOTS, value].sort()
+    : TIME_SLOTS;
+  slots.forEach(slot => {
     const hour = slot.split(':')[0];
     if (!groups[hour]) groups[hour] = [];
     groups[hour].push(slot);
@@ -99,6 +104,8 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
 
   /* Focus trap + ESC */
   const handleKeyDown = useCallback((e) => {
+    // Silme onayı açıkken klavyeyi ConfirmDialog yönetir
+    if (confirmOpen) return;
     if (e.key === 'Escape') { onClose(); return; }
     if (e.key === 'Tab' && modalRef.current) {
       const focusable = modalRef.current.querySelectorAll(
@@ -113,14 +120,20 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
         e.preventDefault(); first.focus();
       }
     }
-  }, [onClose]);
+  }, [onClose, confirmOpen]);
+
+  useEffect(() => {
+    if (!isOpen) setConfirmOpen(false);
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
       requestAnimationFrame(() => {
-        modalRef.current?.querySelector('input, select, textarea')?.focus();
+        if (!modalRef.current?.contains(document.activeElement)) {
+          modalRef.current?.querySelector('input, select, textarea')?.focus();
+        }
       });
     } else {
       document.body.style.overflow = '';
@@ -158,7 +171,12 @@ const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
     if (!formData.day) newErrors.day = 'Gün seçimi zorunludur';
     if (formData.endTime <= formData.startTime) newErrors.endTime = 'Bitiş saati başlangıçtan sonra olmalıdır';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
-    onSave(formData);
+    onSave({
+      ...formData,
+      name: formData.name.trim(),
+      instructor: formData.instructor.trim(),
+      location: formData.location.trim()
+    });
   };
 
   const handleOverlayClick = (e) => { if (e.target === e.currentTarget) onClose(); };
