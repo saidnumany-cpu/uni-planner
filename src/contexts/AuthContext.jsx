@@ -5,9 +5,24 @@ import {
   signInWithRedirect, 
   getRedirectResult, 
   signOut as firebaseSignOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  signInWithCredential
 } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { auth } from '../firebase';
+
+// iOS uygulamasında Google, WebView içinde girişe izin vermiyor.
+// Native Google girişi yapıp kimlik bilgisini Firebase JS SDK'sına aktarıyoruz.
+const isNative = Capacitor.isNativePlatform();
+
+const nativeGoogleSignIn = async () => {
+  const result = await FirebaseAuthentication.signInWithGoogle();
+  const idToken = result.credential?.idToken;
+  if (!idToken) throw new Error('Google girişinden kimlik bilgisi alınamadı.');
+  const credential = GoogleAuthProvider.credential(idToken, result.credential?.accessToken);
+  return await signInWithCredential(auth, credential);
+};
 
 const AuthContext = createContext(null);
 
@@ -18,10 +33,12 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Redirect ile giriş yapıldıysa sonucu kontrol et; hata varsa giriş ekranında göster
-    getRedirectResult(auth).catch((error) => {
-      console.warn('Redirect sign-in result check:', error);
-      setAuthError(error);
-    });
+    if (!isNative) {
+      getRedirectResult(auth).catch((error) => {
+        console.warn('Redirect sign-in result check:', error);
+        setAuthError(error);
+      });
+    }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -40,6 +57,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signInWithGoogle = async () => {
+    if (isNative) return await nativeGoogleSignIn();
     const provider = getGoogleProvider();
     try {
       return await signInWithPopup(auth, provider);
@@ -59,6 +77,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signInWithGoogleRedirect = async () => {
+    if (isNative) return await nativeGoogleSignIn();
     const provider = getGoogleProvider();
     try {
       return await signInWithRedirect(auth, provider);
@@ -70,6 +89,7 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = async () => {
     try {
+      if (isNative) await FirebaseAuthentication.signOut().catch(() => {});
       await firebaseSignOut(auth);
     } catch (error) {
       console.error('Error signing out:', error);

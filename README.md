@@ -41,3 +41,23 @@ Firebase ayarları `.env` dosyasından okunur (`.env.example`'a bakın).
   1. Google Cloud Console → APIs & Services → Credentials → OAuth istemcisine
      `https://<alan-adınız>/__/auth/handler` adresini *Authorized redirect URI* olarak ekleyin.
   2. Vercel ortam değişkeni `VITE_FIREBASE_AUTH_DOMAIN=<alan-adınız>` olarak ayarlayın ve yeniden deploy edin.
+
+## iOS uygulaması (Capacitor)
+
+Uygulama, aynı kodla native bir iOS uygulaması olarak da derlenir (`ios/` klasörü).
+iOS'ta Google girişi, WebView yerine native Google SDK'sı ile yapılır (`@capacitor-firebase/authentication`).
+
+**İlk kurulum (bir kez):**
+1. Firebase Console → Proje ayarları → *Uygulama ekle* → iOS. Paket kimliği: `com.saidnumany.uniplanner`.
+2. İndirilen `GoogleService-Info.plist` dosyasını `ios/App/App/` klasörüne koy.
+3. `npm install`
+
+**Telefona yükleme:**
+1. `npm run ios` → web derlemesi + `cap sync` + Google URL şeması + Xcode açılır.
+2. Xcode → App hedefi → *Signing & Capabilities* → Team olarak Apple ID'ni seç.
+3. iPhone'u kabloyla bağla, üstten cihazı seç, ▶ Run.
+4. İlk açılışta iPhone'da: Ayarlar → Genel → VPN ve Cihaz Yönetimi → geliştiriciye güven.
+   (iOS 16+ ise ayrıca Ayarlar → Gizlilik ve Güvenlik → Geliştirici Modu açık olmalı.)
+
+Kodda değişiklik yaptıktan sonra `npm run ios:sync` ve Xcode'da tekrar Run yeterli.
+Ücretsiz Apple ID ile imzalanan uygulama 7 gün geçerlidir; süre dolunca aynı şekilde yeniden Run.

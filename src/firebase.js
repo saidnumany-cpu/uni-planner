@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, initializeAuth, indexedDBLocalPersistence } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCszJpffFS8JnqDu5StfRoY-zIrySzyL5s",
@@ -24,7 +25,12 @@ try {
   db = getFirestore(app);
 }
 
-const auth = getAuth(app);
+// iOS uygulamasında (Capacitor) getAuth() WebView içinde takılabiliyor;
+// popup/redirect çözücüsü olmadan, IndexedDB kalıcılığıyla başlatıyoruz.
+// Google girişi orada native SDK ile yapılır (AuthContext).
+const auth = Capacitor.isNativePlatform()
+  ? initializeAuth(app, { persistence: indexedDBLocalPersistence })
+  : getAuth(app);
 
 export { app, db, auth };
 
