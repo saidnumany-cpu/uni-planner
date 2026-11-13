@@ -73,7 +73,12 @@ export default function AppShell({ activeTab, onTabChange, onOpenSettings, badge
         <main className="main" id="main">{children}</main>
       </div>
 
-      <nav className="bottom-nav" aria-label="Ana menü">
+      <nav
+        className="bottom-nav"
+        aria-label="Ana menü"
+        style={{ '--n': NAV_ITEMS.length, '--i': Math.max(0, NAV_ITEMS.findIndex(item => item.id === activeTab)) }}
+      >
+        <span className="bottom-nav-lens" aria-hidden="true" />
         {NAV_ITEMS.map(item => {
           const Icon = item.icon;
           return (

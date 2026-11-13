@@ -78,6 +78,20 @@
   --sidebar-w: 248px;
   --touch: 44px;
 
+  /* Liquid Glass */
+  --glass-bg: rgba(255, 255, 255, 0.56);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-edge: rgba(15, 23, 42, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-shine: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 45%);
+  --glass-lens: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 10px 30px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --glass-blur: blur(22px) saturate(185%);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --nav-gap: max(var(--s-3), calc(env(safe-area-inset-bottom) - var(--s-2)));
+  --nav-space: calc(var(--bottomnav-h) + var(--nav-gap));
+
   --z-sticky: 20;
   --z-nav: 40;
   --z-fab: 45;
@@ -118,6 +132,15 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 6px 16px rgba(0, 0, 0, 0.25);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+
+  --glass-bg: rgba(30, 36, 50, 0.5);
+  --glass-bg-strong: rgba(24, 30, 42, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-edge: rgba(0, 0, 0, 0.4);
+  --glass-highlight: rgba(255, 255, 255, 0.22);
+  --glass-shine: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 45%);
+  --glass-lens: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* ==========================================================================
@@ -256,25 +279,46 @@ img { max-width: 100%; display: block; }
 }
 
 .main {
-  padding: var(--s-5) max(var(--s-4), env(safe-area-inset-right)) calc(var(--bottomnav-h) + env(safe-area-inset-bottom) + var(--s-8)) max(var(--s-4), env(safe-area-inset-left));
+  padding: var(--s-5) max(var(--s-4), env(safe-area-inset-right)) calc(var(--nav-space) + var(--s-8)) max(var(--s-4), env(safe-area-inset-left));
   max-width: 1240px;
   margin: 0 auto;
 }
 
-/* Alt menü (mobil) */
+/* Alt menü (mobil) — Liquid Glass: yüzen cam kapsül, seçili sekmede kayan mercek */
 .bottom-nav {
+  --n: 4;
+  --i: 0;
+  --pad: 6px;
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: max(var(--s-4), env(safe-area-inset-left));
+  right: max(var(--s-4), env(safe-area-inset-right));
+  bottom: var(--nav-gap);
   z-index: var(--z-nav);
-  height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom));
-  padding: 0 var(--s-2) env(safe-area-inset-bottom);
+  max-width: 440px;
+  margin: 0 auto;
+  height: var(--bottomnav-h);
+  padding: var(--pad);
   display: flex;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: saturate(160%) blur(12px);
-  -webkit-backdrop-filter: saturate(160%) blur(12px);
-  border-top: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  isolation: isolate;
+}
+
+.bottom-nav-lens {
+  position: absolute;
+  top: var(--pad);
+  bottom: var(--pad);
+  left: var(--pad);
+  width: calc((100% - 2 * var(--pad)) / var(--n));
+  border-radius: var(--radius-full);
+  background: var(--glass-lens);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-border),
+    0 2px 10px rgba(15, 23, 42, 0.08);
+  transform: translateX(calc(var(--i) * 100%));
+  transition: transform 420ms var(--ease-spring);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .bottom-nav-item {
@@ -283,36 +327,30 @@ img { max-width: 100%; display: block; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   border: 0;
   background: none;
-  color: var(--text-3);
-  font-size: 0.75rem;
-  font-weight: 500;
+  color: var(--text-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
   min-height: var(--touch);
+  border-radius: var(--radius-full);
   position: relative;
-  transition: color var(--dur-fast) var(--ease);
+  transition: color var(--dur) var(--ease), transform var(--dur) var(--ease-spring);
 }
 
 .bottom-nav-item .nav-icon-wrap {
-  width: 56px;
-  height: 30px;
-  border-radius: var(--radius-full);
   display: grid;
   place-items: center;
-  transition: background-color var(--dur) var(--ease);
+  height: 26px;
 }
 
 .bottom-nav-item[aria-current='page'] {
   color: var(--primary-text);
 }
 
-.bottom-nav-item[aria-current='page'] .nav-icon-wrap {
-  background: var(--primary-soft);
-}
-
-.bottom-nav-item:active .nav-icon-wrap {
-  background: var(--surface-3);
+.bottom-nav-item:active {
+  transform: scale(0.92);
 }
 
 /* Kenar çubuğu (masaüstü) */
@@ -509,7 +547,7 @@ img { max-width: 100%; display: block; }
 .fab {
   position: fixed;
   right: max(var(--s-4), env(safe-area-inset-right));
-  bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom) + var(--s-4));
+  bottom: calc(var(--nav-space) + var(--s-3));
   z-index: var(--z-fab);
   height: 56px;
   min-width: 56px;
@@ -909,13 +947,12 @@ button.chip:hover { background: var(--surface-2); }
 }
 
 .modal {
-  width: 100%;
-  max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+  width: calc(100% - 2 * var(--s-2));
+  margin-bottom: max(var(--s-2), calc(env(safe-area-inset-bottom) - var(--s-4)));
+  max-height: calc(100dvh - env(safe-area-inset-top) - 32px);
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  box-shadow: var(--shadow-lg);
+  border-radius: 32px;
   animation: sheet-in var(--dur-slow) var(--ease-out) both;
   overflow: hidden;
 }
@@ -924,9 +961,10 @@ button.chip:hover { background: var(--surface-2); }
   content: '';
   display: block;
   width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border-strong);
+  height: 5px;
+  border-radius: 3px;
+  background: var(--text-3);
+  opacity: 0.35;
   margin: 8px auto 0;
   flex-shrink: 0;
 }
@@ -949,9 +987,8 @@ button.chip:hover { background: var(--surface-2); }
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  padding: var(--s-3) var(--s-5) calc(var(--s-3) + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border);
-  background: var(--surface);
+  padding: var(--s-3) var(--s-5) var(--s-4);
+  border-top: 1px solid var(--glass-edge);
 }
 
 .modal-footer .spacer { flex: 1; }
@@ -964,7 +1001,8 @@ button.chip:hover { background: var(--surface-2); }
   .modal {
     max-width: 520px;
     max-height: calc(100dvh - 48px);
-    border-radius: var(--radius-xl);
+    margin-bottom: 0;
+    border-radius: 28px;
     animation-name: dialog-in;
   }
   .modal.modal-sm { max-width: 420px; }
@@ -1642,7 +1680,7 @@ button.agenda-item:active { background: var(--surface-3); }
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom) + 84px);
+  bottom: calc(var(--nav-space) + 84px);
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
@@ -2061,3 +2099,62 @@ button.card:active { background: var(--surface-2); }
 .att-option.attended .state { background: var(--success-solid); }
 .att-option.missed .state { background: var(--danger-solid); }
 .att-option[aria-checked='true'] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); background: var(--primary-soft); }
+
+/* ==========================================================================
+   Liquid Glass malzemesi
+   Yalnızca içeriğin üstünde yüzen katmanlar: alt menü ve modallar.
+   ========================================================================== */
+.bottom-nav,
+.modal {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 0.5px var(--glass-edge),
+    var(--glass-shadow);
+}
+
+/* Formların okunabilir kalması için modal camı daha yoğun */
+.modal {
+  background: var(--glass-bg-strong);
+  position: relative;
+}
+
+/* Üstten vuran ışık yansıması */
+.bottom-nav::after,
+.modal::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-shine);
+  pointer-events: none;
+  z-index: -1;
+}
+.modal::after { z-index: 0; height: 120px; }
+.modal > * { position: relative; z-index: 1; }
+
+/* Cam arkasında karartma hafif kalsın */
+.modal-backdrop {
+  background: color-mix(in srgb, var(--overlay) 70%, transparent);
+}
+
+/* Bulanıklık desteklenmiyorsa ya da "Saydamlığı Azalt" açıksa düz yüzey */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bottom-nav, .modal { background: var(--surface); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .bottom-nav, .modal {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .bottom-nav::after, .modal::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav-lens { transition: none; }
+  .bottom-nav-item:active { transform: none; }
+}
