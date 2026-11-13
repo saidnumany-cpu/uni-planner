@@ -12,7 +12,7 @@ export const notifyError = (err, fallback = 'İşlem başarısız oldu') => {
   console.error(err);
   const code = err?.code || '';
   let message = fallback;
-  if (code === 'permission-denied') message = 'Yetki hatası: Bu işlem için izniniz yok. Lütfen tekrar giriş yapın.';
+  if (code === 'permission-denied') message = 'Kaydedilemedi: Firestore güvenlik kuralları yazmaya izin vermiyor (Firebase Console → Firestore → Rules).';
   else if (code === 'unavailable') message = 'Sunucuya ulaşılamıyor. Değişiklikler bağlantı gelince kaydedilecek.';
   notify(message, 'error');
 };

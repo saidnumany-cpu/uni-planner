@@ -16,6 +16,7 @@ import Toast from './components/Toast'
 import { runInBackground, notify } from './utils/toast'
 import { getDueDateStatus } from './utils/helpers'
 import { pickNextColor } from './utils/course'
+import { AlertCircleIcon } from './icons/SVGIcons'
 
 const TABS = ['schedule', 'homework', 'stats']
 const COURSE_TABS = ['notes', 'homework', 'attendance']
@@ -38,10 +39,26 @@ function FullscreenSpinner() {
   )
 }
 
+/** Veritabanı erişim hatası (genellikle Firestore güvenlik kuralları) */
+function PermissionBanner({ error }) {
+  const denied = /permission|insufficient/i.test(error)
+  return (
+    <div className="alert alert-danger" role="alert" style={{ marginBottom: 'var(--s-5)' }}>
+      <AlertCircleIcon size={18} />
+      <span>
+        <strong>{denied ? 'Veritabanı erişimi reddedildi' : 'Veriler yüklenemedi'}</strong>
+        {denied
+          ? 'Firebase Firestore güvenlik kuralları okuma/yazmaya izin vermiyor. Firebase Console → Firestore Database → Rules bölümüne projedeki firestore.rules içeriğini yapıştırıp yayınla (Publish).'
+          : error}
+      </span>
+    </div>
+  )
+}
+
 /** Giriş yapılmış kullanıcının uygulaması */
 function PlannerApp({ user }) {
   const { weeks } = useSettings()
-  const { courses, loading: coursesLoading, addCourse, updateCourse, deleteCourse } = useCourses(user.uid)
+  const { courses, loading: coursesLoading, error: coursesError, addCourse, updateCourse, deleteCourse } = useCourses(user.uid)
   const hw = useAllHomework(user.uid, courses)
   const att = useAllAttendance(user.uid, courses, weeks)
 
@@ -93,8 +110,8 @@ function PlannerApp({ user }) {
     if (courseModal.course) {
       runInBackground(updateCourse(courseModal.course.id, data), 'Ders güncellenemedi')
     } else {
+      // Başarı mesajı gösterilmiyor: ders anında listede belirir; sunucu reddederse hata bildirimi çıkar
       runInBackground(addCourse(data), 'Ders eklenemedi')
-      notify(`${data.name} eklendi`, 'success')
     }
     closeCourseModal()
   }
@@ -194,6 +211,7 @@ function PlannerApp({ user }) {
         onOpenSettings={() => setSettingsOpen(true)}
         badges={{ homework: urgentCount || null }}
       >
+        {coursesError && <PermissionBanner error={coursesError} />}
         {page}
       </AppShell>
 
