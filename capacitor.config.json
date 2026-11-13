@@ -3,13 +3,14 @@
   "appName": "UniPlanner",
   "webDir": "dist",
   "ios": {
-    "contentInset": "never",
-    "backgroundColor": "#f6f7fb"
+    "contentInset": "never"
   },
   "plugins": {
     "FirebaseAuthentication": {
       "skipNativeAuth": true,
-      "providers": ["google.com"]
+      "providers": [
+        "google.com"
+      ]
     }
   },
   "experimental": {
@@ -22,7 +23,9 @@
           }
         },
         "packageTraits": {
-          "@capacitor-firebase/authentication": ["Google"]
+          "@capacitor-firebase/authentication": [
+            "Google"
+          ]
         }
       }
     }
