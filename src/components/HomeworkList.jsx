@@ -1,206 +1,80 @@
-import React, { useState } from 'react';
-import useHomework from '../hooks/useHomework';
+import { useState } from 'react';
+import HomeworkItem from './HomeworkItem';
 import HomeworkModal from './HomeworkModal';
-import ConfirmDialog from './ConfirmDialog';
-import { getDueDateStatus } from '../utils/helpers';
-import { runInBackground } from '../utils/toast';
-import { TrashIcon, ClipboardIcon, PlusIcon } from '../icons/SVGIcons';
+import EmptyState from './EmptyState';
+import { parseLocalDate } from '../utils/helpers';
+import { ClipboardIcon, PlusIcon } from '../icons/SVGIcons';
 
-/**
- * Ders ödevleri listesi
- * @param {string} userId - Kullanıcı ID'si
- * @param {string} courseId - Ders ID'si
- */
-export default function HomeworkList({ userId, courseId }) {
-  const { homework, loading, addHomework, updateHomework, deleteHomework, toggleComplete } = useHomework(userId, courseId);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingHomework, setEditingHomework] = useState(null);
-  
-  // State for confirm dialog
-  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, homeworkId: null, title: '' });
+export const byDueDate = (a, b) => {
+  const da = parseLocalDate(a.dueDate);
+  const db = parseLocalDate(b.dueDate);
+  if (!da && !db) return 0;
+  if (!da) return 1;
+  if (!db) return -1;
+  return da - db;
+};
 
-  const activeHomework = homework.filter(h => !h.isCompleted);
-  const completedHomework = homework.filter(h => h.isCompleted);
+/** Bir dersin ödevleri (ders detayı sekmesi) */
+export default function HomeworkList({ course, homework, actions }) {
+  const [modal, setModal] = useState({ open: false, hw: null });
+  const active = homework.filter(h => !h.isCompleted).sort(byDueDate);
+  const done = homework.filter(h => h.isCompleted).sort(byDueDate);
 
-  const handleOpenModal = (hw = null) => {
-    setEditingHomework(hw);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setEditingHomework(null);
-    setIsModalOpen(false);
-  };
-
-  const handleSave = (data) => {
-    if (editingHomework) {
-      runInBackground(updateHomework(editingHomework.id, data), 'Ödev güncellenemedi');
-    } else {
-      runInBackground(addHomework(data), 'Ödev eklenemedi');
-    }
-    handleCloseModal();
-  };
-
-  const getUrgencyBadge = (dateString) => {
-    const status = getDueDateStatus(dateString);
-    if (!status) return null;
-
-    if (status.isOverdue) {
-      return <span className="badge badge-danger">Süresi Geçti</span>;
-    } else if (status.isUrgent) {
-      return <span className="badge badge-warning">Yaklaşıyor</span>;
-    } else {
-      return <span className="badge badge-success">{status.due.toLocaleDateString('tr-TR')}</span>;
-    }
-  };
-
-  const handleDeleteClick = (e, hw) => {
-    e.stopPropagation();
-    setConfirmDialog({ isOpen: true, homeworkId: hw.id, title: hw.title });
-  };
-
-  const handleConfirmDelete = () => {
-    if (confirmDialog.homeworkId) {
-      runInBackground(deleteHomework(confirmDialog.homeworkId), 'Ödev silinemedi');
-    }
-    setConfirmDialog({ isOpen: false, homeworkId: null, title: '' });
-  };
-
-  const handleCancelDelete = () => {
-    setConfirmDialog({ isOpen: false, homeworkId: null, title: '' });
-  };
-
-  if (loading) return <div className="text-center text-secondary p-4">Yükleniyor...</div>;
+  const open = (hw = null) => setModal({ open: true, hw });
+  const close = () => setModal({ open: false, hw: null });
 
   return (
-    <div className="homework-list flex-col gap-md">
-      <div className="flex justify-end">
-        <button 
-          className="glass-button-primary flex items-center gap-xs" 
-          onClick={() => handleOpenModal()}
-          style={{ minHeight: '44px', minWidth: '44px' }}
-        >
-          <PlusIcon size={18} /> Yeni Ödev
+    <div className="stack">
+      <div className="row-between">
+        <p className="muted text-sm">{active.length ? `${active.length} bekleyen ödev` : 'Bekleyen ödev yok'}</p>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => open()}>
+          <PlusIcon size={16} /> Ödev ekle
         </button>
       </div>
 
       {homework.length === 0 ? (
-        <div className="empty-state">
-          <div className="mb-4 flex-center text-secondary">
-            <ClipboardIcon size={48} />
-          </div>
-          <h3>Henüz ödev yok</h3>
-          <p className="text-secondary">Bu ders için ödev eklenmemiş.</p>
+        <div className="card">
+          <EmptyState
+            compact
+            icon={<ClipboardIcon size={24} />}
+            title="Bu derse ait ödev yok"
+            description="Ödev ekleyip teslim tarihini girersen yaklaşınca seni uyarırız."
+          />
         </div>
       ) : (
         <>
-          {activeHomework.length > 0 && (
-            <div className="mb-4">
-              <h3 className="text-sm text-secondary mb-2 uppercase tracking-wider">Aktif Ödevler</h3>
-              {activeHomework.map(hw => (
-                <div key={hw.id} className="homework-item glass flex gap-sm items-start mb-2 rounded-lg">
-                  <div className="pt-1">
-                    <input 
-                      type="checkbox" 
-                      id={`hw-check-${hw.id}`}
-                      className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
-                      checked={hw.isCompleted}
-                      onChange={() => runInBackground(toggleComplete(hw.id, hw.isCompleted), 'Ödev güncellenemedi')}
-                      aria-label={`${hw.title} ödevini tamamla`}
-                    />
-                  </div>
-                  <div
-                    className="flex-1 cursor-pointer"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleOpenModal(hw)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenModal(hw); }}
-                    aria-label={`${hw.title} ödevini düzenle`}
-                  >
-                    <div className="flex-between mb-1">
-                      <span className="homework-title font-semibold">{hw.title}</span>
-                      {getUrgencyBadge(hw.dueDate)}
-                    </div>
-                    {hw.description && (
-                      <p className="text-sm text-tertiary line-clamp-2">{hw.description}</p>
-                    )}
-                  </div>
-                  <button 
-                    className="glass-button-icon text-red-400 hover:text-red-300 ml-2 pt-1" 
-                    onClick={(e) => handleDeleteClick(e, hw)}
-                    aria-label={`${hw.title} ödevini sil`}
-                    style={{ minHeight: '44px', minWidth: '44px' }}
-                  >
-                    <TrashIcon size={20} />
-                  </button>
-                </div>
+          {active.length > 0 && (
+            <div className="hw-list">
+              {active.map(hw => (
+                <HomeworkItem key={hw.id} hw={hw} onToggle={actions.toggle} onEdit={open} />
               ))}
             </div>
           )}
-
-          {completedHomework.length > 0 && (
-            <div>
-              <h3 className="text-sm text-secondary mb-2 uppercase tracking-wider">Tamamlanan Ödevler</h3>
-              {completedHomework.map(hw => (
-                <div key={hw.id} className="homework-item completed glass flex gap-sm items-start mb-2 rounded-lg">
-                  <div className="pt-1">
-                    <input 
-                      type="checkbox" 
-                      id={`hw-check-completed-${hw.id}`}
-                      className="w-5 h-5 accent-emerald-500 rounded cursor-pointer"
-                      checked={hw.isCompleted}
-                      onChange={() => runInBackground(toggleComplete(hw.id, hw.isCompleted), 'Ödev güncellenemedi')}
-                      aria-label={`${hw.title} ödevini geri al`}
-                    />
-                  </div>
-                  <div
-                    className="flex-1 cursor-pointer"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleOpenModal(hw)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenModal(hw); }}
-                    aria-label={`${hw.title} ödevini düzenle`}
-                  >
-                    <div className="flex-between mb-1">
-                      <span className="homework-title font-semibold text-secondary" style={{ textDecoration: 'line-through' }}>{hw.title}</span>
-                    </div>
-                  </div>
-                  <button 
-                    className="glass-button-icon text-red-400 hover:text-red-300 ml-2 pt-1" 
-                    onClick={(e) => handleDeleteClick(e, hw)}
-                    aria-label={`${hw.title} ödevini sil`}
-                    style={{ minHeight: '44px', minWidth: '44px' }}
-                  >
-                    <TrashIcon size={20} />
-                  </button>
-                </div>
-              ))}
-            </div>
+          {done.length > 0 && (
+            <section>
+              <h3 className="section-title">Tamamlananlar ({done.length})</h3>
+              <div className="hw-list">
+                {done.map(hw => (
+                  <HomeworkItem key={hw.id} hw={hw} onToggle={actions.toggle} onEdit={open} />
+                ))}
+              </div>
+            </section>
           )}
         </>
       )}
 
-      {isModalOpen && (
-        <HomeworkModal 
-          isOpen={isModalOpen} 
-          onClose={handleCloseModal} 
-          onSave={handleSave} 
-          homework={editingHomework} 
-        />
-      )}
-
-      {confirmDialog.isOpen && (
-        <ConfirmDialog
-          isOpen={confirmDialog.isOpen}
-          title="Ödevi Sil"
-          message={`"${confirmDialog.title}" ödevini silmek istediğinizden emin misiniz?`}
-          onConfirm={handleConfirmDelete}
-          onCancel={handleCancelDelete}
-          confirmText="Sil"
-          cancelText="İptal"
-          variant="danger"
-        />
-      )}
+      <HomeworkModal
+        isOpen={modal.open}
+        homework={modal.hw}
+        courseId={course.id}
+        onClose={close}
+        onSave={(data) => {
+          if (modal.hw) actions.update(modal.hw, data);
+          else actions.add(course.id, data);
+          close();
+        }}
+        onDelete={(hw) => { actions.remove(hw); close(); }}
+      />
     </div>
   );
 }

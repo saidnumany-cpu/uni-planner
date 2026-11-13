@@ -12,10 +12,10 @@ export default defineConfig({
         name: 'UniPlanner — Ders Programı',
         short_name: 'UniPlanner',
         description: 'Üniversite ders programı, not takibi ve yoklama yönetimi',
-        theme_color: '#08090d',
-        background_color: '#08090d',
+        theme_color: '#2563eb',
+        background_color: '#f6f7fb',
         display: 'standalone',
-        orientation: 'portrait',
+        lang: 'tr',
         start_url: '/',
         icons: [
           {

@@ -1,171 +1,172 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
+import Modal from './Modal';
+import ConfirmDialog from './ConfirmDialog';
+import { toDateInputValue } from '../utils/helpers';
+import { AlertCircleIcon, TrashIcon } from '../icons/SVGIcons';
+
+const addDays = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return toDateInputValue(d);
+};
 
 /**
- * Ödev Ekleme/Düzenleme Modalı
- * @param {boolean} isOpen - Modal açık mı?
- * @param {Function} onClose - Modalı kapatma fonksiyonu
- * @param {Function} onSave - Kaydetme fonksiyonu
- * @param {Object|null} homework - Düzenlenecek ödev objesi (yoksa yeni)
+ * Ödev ekleme / düzenleme formu.
+ * `courses` verilirse ders seçimi gösterilir (genel Ödevler sayfası için).
+ * onSave(data, courseId) çağrılır.
  */
-export default function HomeworkModal({ isOpen, onClose, onSave, homework }) {
+export default function HomeworkModal({ isOpen, onClose, onSave, onDelete, homework, courses, courseId: fixedCourseId }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [titleError, setTitleError] = useState('');
-  const modalRef = useRef(null);
-  const titleId = 'homework-modal-title';
+  const [courseId, setCourseId] = useState('');
+  const [errors, setErrors] = useState({});
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
+  const defaultCourseId = courses?.[0]?.id || '';
+
+  // Yalnızca açılışta / farklı ödev seçilince formu doldur
+  // (canlı veri güncellemeleri yazılan metni ezmesin)
+  const homeworkKey = homework?.id || null;
   useEffect(() => {
-    if (homework) {
-      setTitle(homework.title || '');
-      setDescription(homework.description || '');
-      setDueDate(homework.dueDate || '');
-    } else {
-      setTitle('');
-      setDescription('');
-      setDueDate('');
-    }
-    setTitleError('');
-    setSaving(false);
-  }, [homework, isOpen]);
+    if (!isOpen) return;
+    setTitle(homework?.title || '');
+    setDescription(homework?.description || '');
+    setDueDate(homework?.dueDate || '');
+    setCourseId(homework?.courseId || fixedCourseId || defaultCourseId);
+    setErrors({});
+    setConfirmOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeworkKey, isOpen]);
 
-  /* Focus trap + ESC */
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') {
-      onClose();
-      return;
-    }
-    if (e.key === 'Tab' && modalRef.current) {
-      const focusable = modalRef.current.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  }, [onClose]);
+  const showCourseSelect = !fixedCourseId && !homework && Array.isArray(courses);
 
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-      requestAnimationFrame(() => {
-        const firstInput = modalRef.current?.querySelector('input, select, textarea');
-        firstInput?.focus();
-      });
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, handleKeyDown]);
-
-  if (!isOpen) return null;
-
-  /* Today's date for min-date validation */
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    if (!title.trim()) {
-      setTitleError('Ödev başlığı zorunludur');
+    const next = {};
+    if (!title.trim()) next.title = 'Ödev başlığı zorunludur';
+    if (showCourseSelect && !courseId) next.course = 'Bir ders seçin';
+    if (Object.keys(next).length) {
+      setErrors(next);
+      requestAnimationFrame(() => document.querySelector('.modal [aria-invalid="true"]')?.focus());
       return;
     }
-    setTitleError('');
-    setSaving(true);
-    try {
-      await onSave({ title: title.trim(), description: description.trim(), dueDate });
-    } finally {
-      setSaving(false);
-    }
+    onSave({ title: title.trim(), description: description.trim(), dueDate }, courseId);
   };
 
-  const handleOverlayClick = (e) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
+  const quickDates = [
+    { label: 'Bugün', value: addDays(0) },
+    { label: 'Yarın', value: addDays(1) },
+    { label: '1 hafta', value: addDays(7) }
+  ];
 
-  return createPortal(
-    <div
-      className="modal-overlay"
-      onClick={handleOverlayClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-    >
-      <div className="modal-content glass-card glass" ref={modalRef} onClick={e => e.stopPropagation()}>
-        <h2 id={titleId} className="mb-4">{homework ? 'Ödevi Düzenle' : 'Yeni Ödev Ekle'}</h2>
-        
-        <form onSubmit={handleSubmit} className="flex-col gap-md" noValidate>
-          <div className="form-group">
-            <label className="form-label" htmlFor="hw-title">Ödev Başlığı *</label>
-            <input 
-              type="text" 
+  const formId = 'homework-form';
+
+  return (
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={homework ? 'Ödevi düzenle' : 'Yeni ödev'}
+        footer={
+          <>
+            {homework && onDelete && (
+              <button type="button" className="btn btn-danger-ghost" onClick={() => setConfirmOpen(true)}>
+                <TrashIcon size={18} /> Sil
+              </button>
+            )}
+            <span className="spacer" />
+            <button type="button" className="btn" onClick={onClose}>İptal</button>
+            <button type="submit" form={formId} className="btn btn-primary">Kaydet</button>
+          </>
+        }
+      >
+        <form id={formId} className="form-grid" onSubmit={handleSubmit} noValidate>
+          {showCourseSelect && (
+            <div className="field">
+              <label className="field-label" htmlFor="hw-course">Ders</label>
+              <select
+                id="hw-course"
+                className="select"
+                value={courseId}
+                onChange={e => { setCourseId(e.target.value); setErrors(p => ({ ...p, course: undefined })); }}
+                aria-invalid={!!errors.course}
+              >
+                {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              {errors.course && <span className="field-error"><AlertCircleIcon size={14} />{errors.course}</span>}
+            </div>
+          )}
+
+          <div className="field">
+            <label className="field-label" htmlFor="hw-title">Başlık</label>
+            <input
               id="hw-title"
-              className={`glass-input${titleError ? ' input-error' : ''}`}
-              placeholder="Ödev başlığı..."
+              className="input"
               value={title}
-              onChange={e => { setTitle(e.target.value); if (titleError) setTitleError(''); }}
-              aria-required="true"
-              aria-invalid={!!titleError}
-              aria-describedby={titleError ? 'hw-title-error' : undefined}
+              onChange={e => { setTitle(e.target.value); if (errors.title) setErrors(p => ({ ...p, title: undefined })); }}
+              placeholder="Örn. Afiş tasarımı teslimi"
+              autoComplete="off"
+              aria-invalid={!!errors.title}
+              aria-describedby={errors.title ? 'hw-title-err' : undefined}
+              data-autofocus
             />
-            {titleError && <div id="hw-title-error" className="form-error">{titleError}</div>}
+            {errors.title && <span id="hw-title-err" className="field-error"><AlertCircleIcon size={14} />{errors.title}</span>}
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="hw-duedate">Son Tarih</label>
-            <input 
-              type="date" 
-              id="hw-duedate"
-              className="glass-input" 
+          <div className="field">
+            <label className="field-label" htmlFor="hw-due">
+              Teslim tarihi <span className="optional">(isteğe bağlı)</span>
+            </label>
+            <input
+              id="hw-due"
+              type="date"
+              className="input"
               value={dueDate}
               onChange={e => setDueDate(e.target.value)}
-              min={homework ? undefined : today}
             />
+            <div className="row" style={{ flexWrap: 'wrap' }}>
+              {quickDates.map(q => (
+                <button
+                  key={q.label}
+                  type="button"
+                  className="chip"
+                  aria-pressed={dueDate === q.value}
+                  onClick={() => setDueDate(q.value)}
+                >
+                  {q.label}
+                </button>
+              ))}
+              {dueDate && (
+                <button type="button" className="chip" onClick={() => setDueDate('')}>Tarihi kaldır</button>
+              )}
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="hw-desc">Açıklama <span className="text-tertiary">(İsteğe bağlı)</span></label>
-            <textarea 
+          <div className="field">
+            <label className="field-label" htmlFor="hw-desc">
+              Açıklama <span className="optional">(isteğe bağlı)</span>
+            </label>
+            <textarea
               id="hw-desc"
-              className="glass-textarea" 
-              placeholder="Ödev detayları, notlar..."
+              className="textarea"
+              rows={4}
               value={description}
               onChange={e => setDescription(e.target.value)}
-              rows={4}
+              placeholder="Teslim şekli, gereken malzemeler, notlar…"
             />
           </div>
-
-          <div className="flex justify-end gap-sm mt-4">
-            <button type="button" className="glass-button" onClick={onClose} disabled={saving}>
-              İptal
-            </button>
-            <button type="submit" className="glass-button glass-button-primary" disabled={saving} aria-busy={saving}>
-              {saving ? (
-                <span className="flex items-center gap-xs">
-                  <span className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
-                  Kaydediliyor...
-                </span>
-              ) : 'Kaydet'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onConfirm={() => { setConfirmOpen(false); onDelete?.(homework); }}
+        onCancel={() => setConfirmOpen(false)}
+        title="Ödev silinsin mi?"
+        message={`"${homework?.title || ''}" kalıcı olarak silinecek.`}
+        confirmText="Ödevi sil"
+      />
+    </>
   );
 }

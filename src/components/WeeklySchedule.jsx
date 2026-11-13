@@ -1,256 +1,247 @@
-import React, { useState, useEffect } from 'react';
-import { DAYS, TIME_SLOTS, isFullHour } from '../utils/constants';
-import CourseCard from './CourseCard';
-import { PlusIcon } from '../icons/SVGIcons';
+import { useMemo, useState } from 'react';
+import { DAYS, DAY_SHORT, WEEKDAY_COUNT } from '../utils/constants';
+import { flattenSessions, todayIndex } from '../utils/course';
+import useMediaQuery from '../hooks/useMediaQuery';
+import useNow from '../hooks/useNow';
+import EmptyState from './EmptyState';
+import { CalendarIcon, MapPinIcon, PlusIcon } from '../icons/SVGIcons';
 
-// Her slot 15 dakika. Piksel başına 1px = 15 dk baz alındı.
-// Daha okunaklı bir grid için: 1 slot = 16px → 1 saat = 64px
-const SLOT_HEIGHT = 16; // px per 15-min slot
+const HOUR_H = 64; // px / saat
 
-const toMinutes = (time) => {
-  const m = /^(\d{1,2}):(\d{2})/.exec(time || '');
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-};
-const GRID_START_MIN = toMinutes(TIME_SLOTS[0]);
-
-/**
- * Ana haftalık program görünümü
- */
-export default function WeeklySchedule({ courses = [], loading = false, onCourseClick, onAddCourse }) {
-  const currentDayIndex = new Date().getDay() - 1;
-  const initialSelectedDay = currentDayIndex >= 0 && currentDayIndex <= 4 ? currentDayIndex : 0;
-
-  const [viewMode, setViewMode] = useState('week');
-  const [selectedDay, setSelectedDay] = useState(initialSelectedDay);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 768px)');
-    const handleMediaChange = (e) => {
-      setViewMode(e.matches ? 'day' : 'week');
-    };
-    handleMediaChange(mediaQuery);
-    mediaQuery.addEventListener('change', handleMediaChange);
-    return () => mediaQuery.removeEventListener('change', handleMediaChange);
-  }, []);
-
-  /**
-   * Dersin grid pozisyonunu hesaplar (15 dk'lık grid satırları)
-   * rowStart 2'den başlar (ilk satır = başlık)
-   */
-  const getGridArea = (course) => {
-    const dayIndex = DAYS.indexOf(course.day);
-    // Saati dakikaya çevirip en yakın 15 dk'lık satıra yerleştir.
-    // (indexOf kullanılınca 09:10 gibi listede olmayan saatler en üste kayıyordu.)
-    const lastRow = TIME_SLOTS.length + 2;
-    const toRow = (time, roundUp) => {
-      const mins = toMinutes(time);
-      if (mins === null) return null;
-      const slot = (mins - GRID_START_MIN) / 15;
-      const idx = roundUp ? Math.ceil(slot) : Math.floor(slot);
-      return Math.min(Math.max(idx + 2, 2), lastRow);
-    };
-
-    const col = dayIndex !== -1 ? dayIndex + 2 : 2;
-    const rowStart = Math.min(toRow(course.startTime, false) ?? 2, lastRow - 1);
-    const endRow = toRow(course.endTime, true);
-    // endTime yoksa / hatalıysa varsayılan 4 slot (1 saat)
-    const rowEnd = endRow && endRow > rowStart ? endRow : Math.min(rowStart + 4, lastRow);
-
-    return {
-      gridColumn: col,
-      gridRow: `${rowStart} / ${rowEnd}`
-    };
-  };
-
-  /**
-   * Aynı gün çakışan dersleri yan yana sıralamak için şerit (lane) hesabı.
-   * Dönüş: { [courseId]: { lane, lanes } }
-   */
-  const layout = {};
-  DAYS.forEach(day => {
-    const list = courses
-      .filter(c => c.day === day)
-      .map(c => {
-        const start = toMinutes(c.startTime) ?? 0;
-        const end = toMinutes(c.endTime);
-        return { id: c.id, start, end: end && end > start ? end : start + 60 };
-      })
-      .sort((a, b) => a.start - b.start || a.end - b.end);
-
-    let group = [];
-    let groupEnd = -1;
-    const closeGroup = () => {
-      const lanes = Math.max(1, ...group.map(g => g.lane + 1));
-      group.forEach(g => { layout[g.id] = { lane: g.lane, lanes }; });
-      group = [];
-    };
-    list.forEach(item => {
-      if (group.length && item.start >= groupEnd) closeGroup();
-      const laneEnds = [];
-      group.forEach(g => { laneEnds[g.lane] = Math.max(laneEnds[g.lane] ?? 0, g.end); });
-      let lane = laneEnds.findIndex(e => e <= item.start);
-      if (lane === -1) lane = laneEnds.length;
-      group.push({ ...item, lane });
-      groupEnd = Math.max(groupEnd, item.end);
-    });
-    if (group.length) closeGroup();
+/** Bu haftanın Pazartesi'sinden itibaren gün tarihleri */
+const weekDates = (now) => {
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - todayIndex(now));
+  return DAYS.map((_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
   });
+};
 
-  const selectedDayName = DAYS[selectedDay];
-  const dayCourses = courses
-    .filter(c => c.day === selectedDayName)
-    .sort((a, b) => (toMinutes(a.startTime) ?? 0) - (toMinutes(b.startTime) ?? 0));
+/** Aynı gün çakışan oturumları yan yana şeritlere yerleştirir */
+const layoutLanes = (sessions) => {
+  const sorted = [...sessions].sort((a, b) => a.start - b.start || a.end - b.end);
+  const result = {};
+  let group = [];
+  let groupEnd = -1;
+  const flush = () => {
+    const lanes = Math.max(1, ...group.map(g => g.lane + 1));
+    group.forEach(g => { result[g.key] = { lane: g.lane, lanes }; });
+    group = [];
+  };
+  sorted.forEach(item => {
+    if (group.length && item.start >= groupEnd) flush();
+    const laneEnds = [];
+    group.forEach(g => { laneEnds[g.lane] = Math.max(laneEnds[g.lane] ?? 0, g.end); });
+    let lane = laneEnds.findIndex(e => e <= item.start);
+    if (lane === -1) lane = laneEnds.length;
+    group.push({ ...item, lane });
+    groupEnd = Math.max(groupEnd, item.end);
+  });
+  if (group.length) flush();
+  return result;
+};
+
+/* ------------------------------------------------------------------ */
+/* Haftalık ızgara (tablet / masaüstü)                                */
+/* ------------------------------------------------------------------ */
+function WeekGrid({ sessions, onCourseClick, now }) {
+  const tIdx = todayIndex(now);
+  const dates = weekDates(now);
+  const hasWeekend = sessions.some(s => s.dayIndex >= WEEKDAY_COUNT);
+  const dayCount = hasWeekend ? 7 : WEEKDAY_COUNT;
+
+  const minStart = Math.min(...sessions.map(s => s.start), 9 * 60);
+  const maxEnd = Math.max(...sessions.map(s => s.end), 17 * 60);
+  const startHour = Math.max(0, Math.min(8, Math.floor(minStart / 60)));
+  const endHour = Math.min(24, Math.max(18, Math.ceil(maxEnd / 60)));
+  const height = (endHour - startHour) * HOUR_H;
+  const top = (mins) => ((mins - startHour * 60) / 60) * HOUR_H;
+
+  const lanes = useMemo(() => {
+    const out = {};
+    for (let d = 0; d < 7; d++) Object.assign(out, layoutLanes(sessions.filter(s => s.dayIndex === d)));
+    return out;
+  }, [sessions]);
+
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const showNow = tIdx < dayCount && nowMins >= startHour * 60 && nowMins <= endHour * 60;
 
   return (
-    <div className="schedule-container relative">
-      {loading ? (
-        <div className="flex-center" style={{ padding: 'var(--space-2xl) 0' }}>
-          <div className="loading-spinner" />
-        </div>
-      ) : (
-        <>
-          {viewMode === 'day' && (
-            <div
-              className="day-selector flex gap-sm overflow-x-auto pb-4 mb-4"
-              style={{ WebkitOverflowScrolling: 'touch' }}
-            >
-              {DAYS.map((day, idx) => (
-                <button
-                  key={day}
-                  className={`glass-button flex-shrink-0 ${selectedDay === idx ? 'text-white' : 'text-secondary'}`}
-                  aria-pressed={selectedDay === idx}
-                  onClick={() => setSelectedDay(idx)}
-                  style={selectedDay === idx ? { background: 'var(--glass-bg-active)' } : {}}
-                >
-                  {day}
-                </button>
-              ))}
+    <div className="week-wrap">
+      <div className="week-scroll">
+        <div
+          className="week"
+          style={{ gridTemplateColumns: `56px repeat(${dayCount}, minmax(112px, 1fr))`, '--hour-h': `${HOUR_H}px` }}
+        >
+          <div className="week-head-cell" aria-hidden="true" />
+          {DAYS.slice(0, dayCount).map((day, i) => (
+            <div key={day} className={`week-head-cell${i === tIdx ? ' is-today' : ''}`}>
+              <strong>{DAY_SHORT[i]}</strong>
+              {dates[i].getDate()} {dates[i].toLocaleDateString('tr-TR', { month: 'short' })}
             </div>
-          )}
+          ))}
 
-          {courses.length === 0 ? (
-            <div className="empty-state">
-              <div className="text-4xl mb-4" style={{ display: 'flex', justifyContent: 'center' }}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-secondary">
-                  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-                </svg>
-              </div>
-              <h3>Henüz ders eklenmedi</h3>
-              <p className="text-secondary">Sağ alttaki + butonuna tıklayarak ders ekleyin</p>
-            </div>
-          ) : viewMode === 'day' ? (
-            <div className="day-view-list flex-col gap-md">
-              {dayCourses.length > 0 ? (
-                dayCourses.map(course => (
-                  <div key={course.id} style={{ height: 'auto', minHeight: '80px' }}>
-                    <CourseCard course={course} onClick={() => onCourseClick(course)} />
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-secondary py-8">Bu gün için ders bulunmuyor.</div>
-              )}
-            </div>
-          ) : (
-            /* ─── Haftalık Grid ─── */
-            <div
-              className="schedule-grid"
-              style={{
-                // Her TIME_SLOT satırı SLOT_HEIGHT px
-                gridTemplateRows: `auto repeat(${TIME_SLOTS.length}, ${SLOT_HEIGHT}px)`
-              }}
-            >
-              {/* Sol üst boş köşe */}
-              <div className="schedule-day-header" style={{ gridColumn: 1, gridRow: 1 }} />
+          <div className="week-times" style={{ height }} aria-hidden="true">
+            {Array.from({ length: endHour - startHour }, (_, i) => i + startHour).map(h => (
+              <span key={h} className="week-time" style={{ top: (h - startHour) * HOUR_H + (h === startHour ? 10 : 0) }}>
+                {String(h).padStart(2, '0')}:00
+              </span>
+            ))}
+          </div>
 
-              {/* Gün başlıkları */}
-              {DAYS.map((day, index) => (
-                <div
-                  key={day}
-                  className={`schedule-day-header glass-surface flex-center ${new Date().getDay() === index + 1 ? 'text-white' : ''}`}
-                  style={{ gridColumn: index + 2, gridRow: 1 }}
-                >
-                  {day}
-                </div>
-              ))}
-
-              {/* Saat etiketleri + ızgara hücreleri */}
-              {TIME_SLOTS.map((time, timeIndex) => {
-                const fullHour = isFullHour(time);
+          {DAYS.slice(0, dayCount).map((day, d) => (
+            <div key={day} className={`week-day${d === tIdx ? ' is-today' : ''}`} style={{ height }}>
+              {sessions.filter(s => s.dayIndex === d).map(s => {
+                const lane = lanes[s.key] || { lane: 0, lanes: 1 };
+                const h = Math.max(top(s.end) - top(s.start) - 2, 28);
                 return (
-                  <React.Fragment key={time}>
-                    {/* Saat etiketi — sadece tam saatlerde */}
-                    <div
-                      className="schedule-time-label"
-                      style={{
-                        gridColumn: 1,
-                        gridRow: timeIndex + 2,
-                        opacity: fullHour ? 1 : 0,
-                        fontSize: '0.75rem',
-                        // Tam saatlerde üst sınır belirgin
-                        borderTop: fullHour ? '1px solid rgba(255,255,255,0.12)' : undefined
-                      }}
-                    >
-                      {fullHour ? time : ''}
-                    </div>
-
-                    {/* Izgara hücreleri — tam saatte daha belirgin çizgi */}
-                    {DAYS.map((day, dayIndex) => (
-                      <div
-                        key={`${day}-${time}`}
-                        className="schedule-cell"
-                        style={{
-                          gridColumn: dayIndex + 2,
-                          gridRow: timeIndex + 2,
-                          borderTop: fullHour
-                            ? '1px solid rgba(255,255,255,0.1)'
-                            : '1px solid rgba(255,255,255,0.03)',
-                          minHeight: `${SLOT_HEIGHT}px`
-                        }}
-                      />
-                    ))}
-                  </React.Fragment>
+                  <button
+                    key={s.key}
+                    type="button"
+                    className="session"
+                    style={{
+                      '--c': s.course.color || 'var(--primary)',
+                      top: top(s.start) + 1,
+                      height: h,
+                      left: `calc(${(100 / lane.lanes) * lane.lane}% + 3px)`,
+                      width: `calc(${100 / lane.lanes}% - 6px)`,
+                      right: 'auto'
+                    }}
+                    onClick={() => onCourseClick(s.course)}
+                    aria-label={`${s.course.name}, ${day} ${s.startTime}–${s.endTime}${s.location ? `, ${s.location}` : ''}`}
+                  >
+                    <span className="session-title">{s.course.name}</span>
+                    {h >= 44 && <span className="session-meta">{s.startTime}–{s.endTime}</span>}
+                    {h >= 64 && s.location && <span className="session-meta">{s.location}</span>}
+                  </button>
                 );
               })}
-
-              {/* Ders kartları */}
-              {courses.map(course => (
-                <div
-                  key={course.id}
-                  className="schedule-course"
-                  style={{
-                    ...getGridArea(course),
-                    ...(layout[course.id]?.lanes > 1 ? {
-                      width: `calc(${100 / layout[course.id].lanes}% - 2px)`,
-                      marginLeft: `${(100 / layout[course.id].lanes) * layout[course.id].lane}%`
-                    } : {})
-                  }}
-                >
-                  <CourseCard course={course} onClick={() => onCourseClick(course)} />
-                </div>
-              ))}
+              {showNow && d === tIdx && <div className="now-line" style={{ top: top(nowMins) }} aria-hidden="true" />}
             </div>
-          )}
-        </>
-      )}
-
-      {/* FAB */}
-      <button
-        className="glass-button-primary glass-button-icon flex-center shadow-lg"
-        style={{
-          position: 'fixed',
-          bottom: 'calc(80px + env(safe-area-inset-bottom) + 16px)',
-          right: '24px',
-          width: '56px',
-          height: '56px',
-          borderRadius: '50%',
-          zIndex: 50,
-          boxShadow: '0 6px 24px rgba(124, 58, 237, 0.4)'
-        }}
-        onClick={onAddCourse}
-        aria-label="Ders Ekle"
-      >
-        <PlusIcon size={24} />
-      </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Günlük ajanda (telefon)                                            */
+/* ------------------------------------------------------------------ */
+export function AgendaList({ sessions, onCourseClick, now, isToday }) {
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  return (
+    <div className="agenda">
+      {sessions.map(s => {
+        const isNow = isToday && nowMins >= s.start && nowMins < s.end;
+        const isPast = isToday && nowMins >= s.end;
+        return (
+          <button
+            key={s.key}
+            type="button"
+            className={`agenda-item${isNow ? ' is-now' : ''}${isPast ? ' is-past' : ''}`}
+            onClick={() => onCourseClick(s.course)}
+          >
+            <span className="agenda-time">
+              {s.startTime}
+              <small>{s.endTime}</small>
+            </span>
+            <span className="agenda-bar" style={{ background: s.course.color || 'var(--primary)' }} aria-hidden="true" />
+            <span className="agenda-body">
+              <span className="row" style={{ gap: 'var(--s-2)' }}>
+                <span className="agenda-title">{s.course.name}</span>
+                {isNow && <span className="badge badge-primary">Şu an</span>}
+              </span>
+              {(s.location || s.course.instructor) && (
+                <span className="meta truncate">
+                  {s.location && <><MapPinIcon size={14} />{s.location}</>}
+                  {s.location && s.course.instructor && ' · '}
+                  {s.course.instructor}
+                </span>
+              )}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function DayAgenda({ sessions, onCourseClick, now }) {
+  const tIdx = todayIndex(now);
+  const dates = weekDates(now);
+  const hasWeekend = sessions.some(s => s.dayIndex >= WEEKDAY_COUNT);
+  const dayCount = hasWeekend || tIdx >= WEEKDAY_COUNT ? 7 : WEEKDAY_COUNT;
+  // Hafta sonu ve o gün ders yoksa Pazartesi'den başla
+  const [selected, setSelected] = useState(() => (tIdx < dayCount ? tIdx : 0));
+  const daySessions = sessions.filter(s => s.dayIndex === selected).sort((a, b) => a.start - b.start);
+
+  return (
+    <div>
+      <div className="day-tabs" role="tablist" aria-label="Gün seç">
+        {DAYS.slice(0, dayCount).map((day, i) => {
+          const count = sessions.filter(s => s.dayIndex === i).length;
+          return (
+            <button
+              key={day}
+              type="button"
+              role="tab"
+              aria-selected={selected === i}
+              aria-label={`${day}${count ? `, ${count} ders` : ', ders yok'}`}
+              className={`day-tab${i === tIdx ? ' is-today' : ''}`}
+              onClick={() => setSelected(i)}
+            >
+              {DAY_SHORT[i]}
+              <strong>{dates[i].getDate()}</strong>
+              {count > 0 && <span className="dot" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div role="tabpanel" aria-label={DAYS[selected]}>
+        {daySessions.length ? (
+          <AgendaList sessions={daySessions} onCourseClick={onCourseClick} now={now} isToday={selected === tIdx} />
+        ) : (
+          <div className="card">
+            <EmptyState compact icon={<CalendarIcon size={24} />} title={`${DAYS[selected]} günü ders yok`} description="Boş bir gün — ödevlere ya da notlara göz atabilirsin." />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Program görünümü: telefonda günlük ajanda, geniş ekranda haftalık ızgara
+ */
+export default function WeeklySchedule({ courses, loading, onCourseClick, onAddCourse }) {
+  const wide = useMediaQuery('(min-width: 768px)');
+  const now = useNow();
+  const sessions = useMemo(() => flattenSessions(courses).filter(s => s.dayIndex !== -1), [courses]);
+
+  if (loading) {
+    return <div className="skeleton" style={{ height: wide ? 480 : 300 }} aria-label="Yükleniyor" />;
+  }
+
+  if (courses.length === 0) {
+    return (
+      <div className="card">
+        <EmptyState
+          icon={<CalendarIcon size={26} />}
+          title="Programın henüz boş"
+          description="Derslerini gün ve saatleriyle ekle; haftalık programın, notların ve yoklaman burada toplansın."
+          action={<button type="button" className="btn btn-primary" onClick={onAddCourse}><PlusIcon size={18} /> İlk dersini ekle</button>}
+        />
+      </div>
+    );
+  }
+
+  return wide
+    ? <WeekGrid sessions={sessions} onCourseClick={onCourseClick} now={now} />
+    : <DayAgenda sessions={sessions} onCourseClick={onCourseClick} now={now} />;
+}
+

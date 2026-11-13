@@ -1,356 +1,309 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { DAYS, TIME_SLOTS, COURSE_COLORS, getDefaultEndTime } from '../utils/constants';
+import { useEffect, useState } from 'react';
+import Modal from './Modal';
 import ConfirmDialog from './ConfirmDialog';
+import { DAYS, TIME_SLOTS, COURSE_COLORS, DEFAULT_ABSENCE_LIMIT, getDefaultEndTime, toMinutes } from '../utils/constants';
+import { getSessions, getAbsenceLimit } from '../utils/course';
+import { CheckIcon, MinusIcon, PlusIcon, TrashIcon, AlertCircleIcon } from '../icons/SVGIcons';
 
-/* Human-readable color labels */
-const COLOR_LABELS = {
-  '#7c3aed': 'Mor',
-  '#2563eb': 'Mavi',
-  '#0891b2': 'Camgöbeği',
-  '#059669': 'Yeşil',
-  '#d97706': 'Amber',
-  '#dc2626': 'Kırmızı',
-  '#db2777': 'Pembe',
-  '#4f46e5': 'İndigo',
-  '#0d9488': 'Deniz Yeşili',
-  '#ea580c': 'Turuncu'
-};
-
-/**
- * 15 dakikalık TIME_SLOTS'u saat başlıklarıyla gruplandırır.
- * <optgroup> ile daha okunaklı bir dropdown oluşturur.
- */
-function TimeSelect({ id, name, value, onChange, className, ariaRequired, ariaInvalid, ariaDescribedby }) {
-  // Saate göre grupla: { '08': ['08:00','08:15','08:30','08:45'], ... }
-  const groups = {};
-  // Eski kayıtlarda 15 dk aralığına uymayan bir saat olabilir (örn. 09:10) —
-  // seçili değer listede yoksa ekle ki select yanlış değeri göstermesin.
-  const slots = value && !TIME_SLOTS.includes(value)
-    ? [...TIME_SLOTS, value].sort()
-    : TIME_SLOTS;
-  slots.forEach(slot => {
-    const hour = slot.split(':')[0];
-    if (!groups[hour]) groups[hour] = [];
-    groups[hour].push(slot);
-  });
-
+/** 15 dk aralıklı saat seçici. Listede olmayan eski değerleri de gösterir. */
+function TimeSelect({ value, onChange, ...rest }) {
+  const slots = value && !TIME_SLOTS.includes(value) ? [...TIME_SLOTS, value].sort() : TIME_SLOTS;
   return (
-    <select
-      id={id}
-      name={name}
-      className={className}
-      value={value}
-      onChange={onChange}
-      aria-required={ariaRequired}
-      aria-invalid={ariaInvalid}
-      aria-describedby={ariaDescribedby}
-    >
-      {Object.entries(groups).map(([hour, slots]) => (
-        <optgroup key={hour} label={`${hour}:00 - ${hour}:45`}>
-          {slots.map(slot => (
-            <option key={slot} value={slot}>{slot}</option>
-          ))}
-        </optgroup>
-      ))}
+    <select className="select" value={value} onChange={e => onChange(e.target.value)} {...rest}>
+      {slots.map(t => <option key={t} value={t}>{t}</option>)}
     </select>
   );
 }
 
-/**
- * Ders ekleme/düzenleme modali
- */
-const CourseModal = ({ isOpen, onClose, onSave, onDelete, course }) => {
-  const defaultStart = '09:00';
-  const [formData, setFormData] = useState({
-    name: '',
-    instructor: '',
-    day: DAYS[0],
-    startTime: defaultStart,
-    endTime: getDefaultEndTime(defaultStart),
-    location: '',
-    color: COURSE_COLORS[0]
-  });
+const newSession = (day = DAYS[0], startTime = '09:00') => ({
+  day,
+  startTime,
+  endTime: getDefaultEndTime(startTime),
+  location: ''
+});
 
+const emptyForm = (color = COURSE_COLORS[0].value) => ({
+  name: '',
+  instructor: '',
+  color,
+  absenceLimit: DEFAULT_ABSENCE_LIMIT,
+  sessions: [newSession()]
+});
+
+/**
+ * Ders ekleme / düzenleme formu.
+ * Bir ders haftada birden fazla gün/saatte olabilir (oturumlar).
+ */
+export default function CourseModal({ isOpen, onClose, onSave, onDelete, course, defaultColor }) {
+  const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const modalRef = useRef(null);
-  const titleId = 'course-modal-title';
 
   useEffect(() => {
+    if (!isOpen) return;
     if (course) {
-      setFormData({
+      const sessions = getSessions(course);
+      setForm({
         name: course.name || '',
         instructor: course.instructor || '',
-        day: course.day || DAYS[0],
-        startTime: course.startTime || defaultStart,
-        endTime: course.endTime || getDefaultEndTime(defaultStart),
-        location: course.location || '',
-        color: course.color || COURSE_COLORS[0]
+        color: course.color || COURSE_COLORS[0].value,
+        absenceLimit: getAbsenceLimit(course),
+        sessions: sessions.length
+          ? sessions.map(s => ({ ...s, location: s.location || course.location || '' }))
+          : [newSession()]
       });
     } else {
-      setFormData({
-        name: '',
-        instructor: '',
-        day: DAYS[0],
-        startTime: defaultStart,
-        endTime: getDefaultEndTime(defaultStart),
-        location: '',
-        color: COURSE_COLORS[0]
-      });
+      setForm(emptyForm(defaultColor));
     }
     setErrors({});
-  }, [course, isOpen]);
+    setConfirmOpen(false);
+    // Yalnızca açılışta / farklı ders seçilince doldur (canlı güncellemeler formu ezmesin)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course?.id, isOpen]);
 
-  /* Focus trap + ESC */
-  const handleKeyDown = useCallback((e) => {
-    // Silme onayı açıkken klavyeyi ConfirmDialog yönetir
-    if (confirmOpen) return;
-    if (e.key === 'Escape') { onClose(); return; }
-    if (e.key === 'Tab' && modalRef.current) {
-      const focusable = modalRef.current.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault(); last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault(); first.focus();
-      }
-    }
-  }, [onClose, confirmOpen]);
+  const set = (key, value) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+    if (errors[key]) setErrors(prev => ({ ...prev, [key]: undefined }));
+  };
 
-  useEffect(() => {
-    if (!isOpen) setConfirmOpen(false);
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-      requestAnimationFrame(() => {
-        if (!modalRef.current?.contains(document.activeElement)) {
-          modalRef.current?.querySelector('input, select, textarea')?.focus();
+  const updateSession = (index, key, value) => {
+    setForm(prev => {
+      const sessions = prev.sessions.map((s, i) => {
+        if (i !== index) return s;
+        const next = { ...s, [key]: value };
+        // Başlangıç bitişi geçerse bitişi otomatik 1 saat sonraya al
+        if (key === 'startTime' && toMinutes(next.endTime) <= toMinutes(value)) {
+          next.endTime = getDefaultEndTime(value);
         }
+        return next;
       });
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, handleKeyDown]);
-
-  if (!isOpen) return null;
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setFormData(prev => {
-      const next = { ...prev, [name]: value };
-
-      // startTime değiştiğinde endTime'ı otomatik güncelle
-      // (sadece endTime zaten startTime'dan önce/eşit ise)
-      if (name === 'startTime' && next.endTime <= value) {
-        next.endTime = getDefaultEndTime(value);
-      }
-
-      return next;
+      return { ...prev, sessions };
     });
+    setErrors(prev => ({ ...prev, [`session-${index}`]: undefined }));
+  };
 
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  const addSession = () => {
+    setForm(prev => {
+      const last = prev.sessions[prev.sessions.length - 1];
+      const nextDay = last ? DAYS[Math.min(DAYS.indexOf(last.day) + 2, 4)] : DAYS[0];
+      return {
+        ...prev,
+        sessions: [...prev.sessions, { ...newSession(nextDay, last?.startTime || '09:00'), endTime: last?.endTime || getDefaultEndTime('09:00'), location: last?.location || '' }]
+      };
+    });
+  };
+
+  const removeSession = (index) => {
+    setForm(prev => ({ ...prev, sessions: prev.sessions.filter((_, i) => i !== index) }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = 'Ders adı zorunludur';
-    if (!formData.day) newErrors.day = 'Gün seçimi zorunludur';
-    if (formData.endTime <= formData.startTime) newErrors.endTime = 'Bitiş saati başlangıçtan sonra olmalıdır';
-    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    const next = {};
+    if (!form.name.trim()) next.name = 'Ders adı zorunludur';
+    form.sessions.forEach((s, i) => {
+      if (toMinutes(s.endTime) <= toMinutes(s.startTime)) {
+        next[`session-${i}`] = 'Bitiş saati başlangıçtan sonra olmalı';
+      }
+    });
+    if (Object.keys(next).length) {
+      setErrors(next);
+      // İlk hatalı alana odaklan
+      requestAnimationFrame(() => document.querySelector('.modal [aria-invalid="true"]')?.focus());
+      return;
+    }
+
+    const sessions = form.sessions
+      .map(s => ({ day: s.day, startTime: s.startTime, endTime: s.endTime, location: (s.location || '').trim() }))
+      .sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || toMinutes(a.startTime) - toMinutes(b.startTime));
+    const first = sessions[0];
+
     onSave({
-      ...formData,
-      name: formData.name.trim(),
-      instructor: formData.instructor.trim(),
-      location: formData.location.trim()
+      name: form.name.trim(),
+      instructor: form.instructor.trim(),
+      color: form.color,
+      absenceLimit: Number(form.absenceLimit) || 0,
+      sessions,
+      // Eski sürümlerle uyumluluk için ilk oturum düz alanlarda da tutulur
+      day: first.day,
+      startTime: first.startTime,
+      endTime: first.endTime,
+      location: first.location
     });
   };
 
-  const handleOverlayClick = (e) => { if (e.target === e.currentTarget) onClose(); };
+  const formId = 'course-form';
 
-  return createPortal(
-    <div
-      className="modal-overlay"
-      onClick={handleOverlayClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-    >
-      <div className="glass modal-content glass-card" ref={modalRef}>
-        <h2 id={titleId} style={{ marginBottom: 'var(--space-lg)' }}>
-          {course ? 'Dersi Düzenle' : 'Yeni Ders Ekle'}
-        </h2>
-
-        <form onSubmit={handleSubmit} noValidate>
-          {/* Ders Adı */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="course-name">Ders Adı *</label>
+  return (
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={course ? 'Dersi düzenle' : 'Yeni ders'}
+        footer={
+          <>
+            {course && onDelete && (
+              <button type="button" className="btn btn-danger-ghost" onClick={() => setConfirmOpen(true)}>
+                <TrashIcon size={18} /> Sil
+              </button>
+            )}
+            <span className="spacer" />
+            <button type="button" className="btn" onClick={onClose}>İptal</button>
+            <button type="submit" form={formId} className="btn btn-primary">Kaydet</button>
+          </>
+        }
+      >
+        <form id={formId} className="form-grid" onSubmit={handleSubmit} noValidate>
+          <div className="field">
+            <label className="field-label" htmlFor="course-name">Ders adı</label>
             <input
-              type="text"
               id="course-name"
-              name="name"
-              className={`glass-input${errors.name ? ' input-error' : ''}`}
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Örn: Matematik 101"
-              aria-required="true"
+              className="input"
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              placeholder="Örn. Tipografi II"
+              autoComplete="off"
               aria-invalid={!!errors.name}
-              aria-describedby={errors.name ? 'name-error' : undefined}
+              aria-describedby={errors.name ? 'course-name-err' : undefined}
+              data-autofocus
             />
-            {errors.name && <div id="name-error" className="form-error">{errors.name}</div>}
+            {errors.name && <span id="course-name-err" className="field-error"><AlertCircleIcon size={14} />{errors.name}</span>}
           </div>
 
-          {/* Öğretim Üyesi */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="course-instructor">
-              Öğretim Üyesi <span className="text-tertiary">(İsteğe bağlı)</span>
+          <div className="field">
+            <label className="field-label" htmlFor="course-instructor">
+              Öğretim üyesi <span className="optional">(isteğe bağlı)</span>
             </label>
             <input
-              type="text"
               id="course-instructor"
-              name="instructor"
-              className="glass-input"
-              value={formData.instructor}
-              onChange={handleChange}
-              placeholder="Örn: Dr. Ahmet Yılmaz"
+              className="input"
+              value={form.instructor}
+              onChange={e => set('instructor', e.target.value)}
+              placeholder="Örn. Dr. Ayşe Yılmaz"
+              autoComplete="off"
             />
           </div>
 
-          {/* Gün */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="course-day">Gün *</label>
-            <select
-              id="course-day"
-              name="day"
-              className="glass-input"
-              value={formData.day}
-              onChange={handleChange}
-              aria-required="true"
-            >
-              {DAYS.map(day => <option key={day} value={day}>{day}</option>)}
-            </select>
-          </div>
+          <fieldset className="fieldset">
+            <legend className="field-label" style={{ padding: '0 4px' }}>Ders saatleri</legend>
+            {form.sessions.map((s, i) => {
+              const err = errors[`session-${i}`];
+              return (
+                <div key={i} className="session-row">
+                  <div className="session-row-head">
+                    <span>{form.sessions.length > 1 ? `${i + 1}. oturum` : 'Oturum'}</span>
+                    {form.sessions.length > 1 && (
+                      <button
+                        type="button"
+                        className="icon-btn danger"
+                        style={{ width: 36, height: 36 }}
+                        onClick={() => removeSession(i)}
+                        aria-label={`${i + 1}. oturumu kaldır`}
+                      >
+                        <TrashIcon size={16} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="field full">
+                    <label className="field-label sr-only" htmlFor={`s-day-${i}`}>Gün</label>
+                    <select
+                      id={`s-day-${i}`}
+                      className="select"
+                      value={s.day}
+                      onChange={e => updateSession(i, 'day', e.target.value)}
+                    >
+                      {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="field-label text-xs muted" htmlFor={`s-start-${i}`}>Başlangıç</label>
+                    <TimeSelect id={`s-start-${i}`} value={s.startTime} onChange={v => updateSession(i, 'startTime', v)} />
+                  </div>
+                  <div className="field">
+                    <label className="field-label text-xs muted" htmlFor={`s-end-${i}`}>Bitiş</label>
+                    <TimeSelect
+                      id={`s-end-${i}`}
+                      value={s.endTime}
+                      onChange={v => updateSession(i, 'endTime', v)}
+                      aria-invalid={!!err}
+                      aria-describedby={err ? `s-err-${i}` : undefined}
+                    />
+                  </div>
+                  {err && <span id={`s-err-${i}`} className="field-error full"><AlertCircleIcon size={14} />{err}</span>}
+                  <div className="field full">
+                    <label className="field-label sr-only" htmlFor={`s-loc-${i}`}>Derslik</label>
+                    <input
+                      id={`s-loc-${i}`}
+                      className="input"
+                      value={s.location}
+                      onChange={e => updateSession(i, 'location', e.target.value)}
+                      placeholder="Derslik (isteğe bağlı), örn. B-204"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <button type="button" className="btn btn-sm btn-ghost" onClick={addSession} style={{ alignSelf: 'flex-start' }}>
+              <PlusIcon size={16} /> Başka gün/saat ekle
+            </button>
+          </fieldset>
 
-          {/* Başlangıç & Bitiş — 15 dk aralıklı gruplandırılmış dropdown */}
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label" htmlFor="course-start">Başlangıç</label>
-              <TimeSelect
-                id="course-start"
-                name="startTime"
-                className="glass-input"
-                value={formData.startTime}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="course-end">Bitiş</label>
-              <TimeSelect
-                id="course-end"
-                name="endTime"
-                className={`glass-input${errors.endTime ? ' input-error' : ''}`}
-                value={formData.endTime}
-                onChange={handleChange}
-                ariaInvalid={!!errors.endTime}
-                ariaDescribedby={errors.endTime ? 'endtime-error' : undefined}
-              />
-              {errors.endTime && <div id="endtime-error" className="form-error">{errors.endTime}</div>}
-            </div>
-          </div>
-
-          {/* Derslik */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="course-location">
-              Derslik <span className="text-tertiary">(İsteğe bağlı)</span>
-            </label>
-            <input
-              type="text"
-              id="course-location"
-              name="location"
-              className="glass-input"
-              value={formData.location}
-              onChange={handleChange}
-              placeholder="Örn: A-201"
-            />
-          </div>
-
-          {/* Renk */}
-          <div className="form-group">
-            <label className="form-label">Renk</label>
-            <div
-              className="flex"
-              style={{ gap: 'var(--space-sm)', flexWrap: 'wrap' }}
-              role="radiogroup"
-              aria-label="Ders rengi seç"
-            >
-              {COURSE_COLORS.map(color => (
+          <div className="field">
+            <span className="field-label" id="absence-label">Devamsızlık hakkı</span>
+            <div className="row" style={{ gap: 'var(--s-3)', flexWrap: 'wrap' }}>
+              <div className="stepper" role="group" aria-labelledby="absence-label">
                 <button
-                  key={color}
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, color }))}
-                  aria-label={`Renk: ${COLOR_LABELS[color] || color}`}
+                  onClick={() => set('absenceLimit', Math.max(0, Number(form.absenceLimit) - 1))}
+                  disabled={Number(form.absenceLimit) <= 0}
+                  aria-label="Azalt"
+                >
+                  <MinusIcon size={18} />
+                </button>
+                <output aria-live="polite">{form.absenceLimit}</output>
+                <button
+                  type="button"
+                  onClick={() => set('absenceLimit', Math.min(30, Number(form.absenceLimit) + 1))}
+                  aria-label="Artır"
+                >
+                  <PlusIcon size={18} />
+                </button>
+              </div>
+              <span className="field-hint">hafta — dolmaya yaklaşınca uyarılırsın</span>
+            </div>
+          </div>
+
+          <div className="field">
+            <span className="field-label" id="color-label">Renk</span>
+            <div className="color-options" role="radiogroup" aria-labelledby="color-label">
+              {COURSE_COLORS.map(c => (
+                <button
+                  key={c.value}
+                  type="button"
                   role="radio"
-                  aria-checked={formData.color === color}
-                  style={{
-                    width: '36px', height: '36px', minWidth: '36px', minHeight: '36px',
-                    borderRadius: '50%', backgroundColor: color, cursor: 'pointer',
-                    border: formData.color === color ? '2px solid white' : '2px solid transparent',
-                    boxShadow: formData.color === color ? '0 0 10px rgba(255,255,255,0.5)' : 'none',
-                    transition: 'all var(--transition-fast)', padding: 0
-                  }}
-                />
+                  aria-checked={form.color === c.value}
+                  aria-label={c.label}
+                  className="color-swatch"
+                  style={{ background: c.value }}
+                  onClick={() => set('color', c.value)}
+                >
+                  {form.color === c.value && <CheckIcon size={18} />}
+                </button>
               ))}
             </div>
           </div>
-
-          {/* Butonlar */}
-          <div className="flex-between" style={{ marginTop: 'var(--space-xl)' }}>
-            <div>
-              {course && onDelete && (
-                <button
-                  type="button"
-                  className="glass-button glass-button-danger"
-                  onClick={() => setConfirmOpen(true)}
-                >
-                  Sil
-                </button>
-              )}
-            </div>
-            <div className="flex gap-sm">
-              <button type="button" className="glass-button" onClick={onClose}>İptal</button>
-              <button type="submit" className="glass-button glass-button-primary">Kaydet</button>
-            </div>
-          </div>
         </form>
-      </div>
+      </Modal>
 
       <ConfirmDialog
         isOpen={confirmOpen}
         onConfirm={() => { setConfirmOpen(false); onDelete(course.id); }}
         onCancel={() => setConfirmOpen(false)}
-        title="Dersi Sil"
-        message={`"${formData.name}" dersini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve derse ait tüm notlar, ödevler ve yoklama verileri silinecektir.`}
-        confirmText="Evet, Sil"
-        cancelText="Vazgeç"
-        variant="danger"
+        title="Ders silinsin mi?"
+        message={`"${form.name || course?.name || ''}" dersi; notları, ödevleri ve yoklama kayıtlarıyla birlikte kalıcı olarak silinecek.`}
+        confirmText="Dersi sil"
       />
-    </div>,
-    document.body
+    </>
   );
-};
-
-export default CourseModal;
+}

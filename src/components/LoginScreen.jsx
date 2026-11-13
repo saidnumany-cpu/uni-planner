@@ -1,168 +1,111 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { GoogleIcon } from '../icons/SVGIcons';
+import { GoogleIcon, GraduationCapIcon, CalendarIcon, BookOpenIcon, ClipboardIcon, CheckCircleIcon, AlertCircleIcon } from '../icons/SVGIcons';
 
-/**
- * Kullanıcı giriş ekranı
- */
-const LoginScreen = () => {
+const getErrorMessage = (err) => {
+  const code = err?.code || '';
+  switch (code) {
+    case 'auth/unauthorized-domain':
+      return { title: 'Bu alan adı yetkilendirilmemiş.', detail: `Firebase Console → Authentication → Settings → Authorized domains listesine "${window.location.hostname}" eklenmeli.` };
+    case 'auth/popup-blocked':
+      return { title: 'Giriş penceresi engellendi.', detail: 'Tarayıcında açılır pencerelere izin ver ya da aşağıdaki yönlendirmeli girişi kullan.' };
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return { title: 'Giriş tamamlanmadı.', detail: 'Pencere kapatıldı. Tekrar deneyebilir ya da yönlendirmeli girişi kullanabilirsin.' };
+    case 'auth/network-request-failed':
+      return { title: 'İnternet bağlantısı yok gibi görünüyor.', detail: 'Bağlantını kontrol edip tekrar dene.' };
+    default:
+      return { title: 'Giriş yapılamadı.', detail: err?.message || 'Lütfen tekrar dene.' };
+  }
+};
+
+const FEATURES = [
+  { icon: CalendarIcon, text: 'Haftalık ders programı, bugünkü dersler' },
+  { icon: BookOpenIcon, text: 'Her ders için haftalık notlar' },
+  { icon: ClipboardIcon, text: 'Teslim tarihli ödev takibi' },
+  { icon: CheckCircleIcon, text: 'Yoklama ve devamsızlık hakkı uyarısı' }
+];
+
+/** Giriş ekranı */
+export default function LoginScreen() {
   const { signInWithGoogle, signInWithGoogleRedirect, authError, clearAuthError } = useAuth();
-  const [error, setError] = useState('');
-  const [errorDetail, setErrorDetail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showRedirectOption, setShowRedirectOption] = useState(false);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [showRedirect, setShowRedirect] = useState(false);
 
-  const getErrorMessage = (err) => {
-    const code = err?.code || '';
-    if (code === 'auth/unauthorized-domain') {
-      return {
-        title: 'Bu alan adı (domain) yetkilendirilmemiş.',
-        detail: `Firebase Console > Authentication > Settings > Authorized domains bölümüne "${window.location.hostname}" eklenmelidir.`
-      };
-    }
-    if (code === 'auth/popup-blocked') {
-      return {
-        title: 'Açılır pencere (popup) tarayıcınız tarafından engellendi.',
-        detail: 'Lütfen tarayıcınızdan açılır pencerelere izin verin veya aşağıdaki "Yönlendirme ile Giriş Yap" seçeneğini kullanın.'
-      };
-    }
-    if (code === 'auth/popup-closed-by-user') {
-      return {
-        title: 'Giriş penceresi tamamlanmadan kapatıldı.',
-        detail: 'Lütfen tekrar deneyerek Google hesabınızı seçin.'
-      };
-    }
-    if (code === 'auth/network-request-failed') {
-      return {
-        title: 'Ağ bağlantısı hatası oluştu.',
-        detail: 'Lütfen internet bağlantınızı kontrol edip tekrar deneyin.'
-      };
-    }
-    if (code === 'auth/cancelled-popup-request') {
-      return {
-        title: 'Giriş işlemi iptal edildi.',
-        detail: 'Birden fazla pencere açılmış olabilir. Lütfen tekrar deneyin.'
-      };
-    }
-    return {
-      title: 'Giriş yapılırken bir hata oluştu.',
-      detail: err?.message || 'Lütfen tekrar deneyin.'
-    };
-  };
-
-  // Redirect dönüşünde oluşan hatayı göster
   useEffect(() => {
     if (!authError) return;
-    const parsed = getErrorMessage(authError);
-    setError(parsed.title);
-    setErrorDetail(parsed.detail);
-    setShowRedirectOption(false);
+    setError(getErrorMessage(authError));
     clearAuthError();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authError]);
 
-  const handleLogin = async () => {
+  const run = async (fn) => {
+    setError(null);
+    setLoading(true);
     try {
-      setError('');
-      setErrorDetail('');
-      setIsLoading(true);
-      await signInWithGoogle();
+      await fn();
     } catch (err) {
-      console.error('Login error:', err);
-      const parsed = getErrorMessage(err);
-      setError(parsed.title);
-      setErrorDetail(parsed.detail);
+      console.error('Giriş hatası:', err);
+      setError(getErrorMessage(err));
       if (['auth/popup-blocked', 'auth/cancelled-popup-request', 'auth/popup-closed-by-user'].includes(err?.code)) {
-        setShowRedirectOption(true);
+        setShowRedirect(true);
       }
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRedirectLogin = async () => {
-    try {
-      setError('');
-      setErrorDetail('');
-      setIsLoading(true);
-      await signInWithGoogleRedirect();
-    } catch (err) {
-      console.error('Redirect login error:', err);
-      const parsed = getErrorMessage(err);
-      setError(parsed.title);
-      setErrorDetail(parsed.detail);
-    } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex-center animate-fade-in" style={{ minHeight: '100dvh', padding: 'var(--space-md)' }}>
-      <div className="glass glass-card animate-slide-up" style={{ width: '100%', maxWidth: '420px', textAlign: 'center' }}>
-        <div style={{ fontSize: '4rem', marginBottom: 'var(--space-md)' }}>
-          🎓
-        </div>
-        <h1 style={{ marginBottom: 'var(--space-xs)' }}>UniPlanner</h1>
-        <p className="text-secondary" style={{ marginBottom: 'var(--space-xl)' }}>
-          Ders Programı & Not Takibi
-        </p>
-
-        {error && (
-          <div 
-            className="glass-surface text-sm" 
-            style={{ 
-              color: 'var(--accent-red)', 
-              padding: 'var(--space-md)', 
-              marginBottom: 'var(--space-md)',
-              textAlign: 'left',
-              borderRadius: 'var(--glass-radius-sm)',
-              border: '1px solid rgba(220, 38, 38, 0.3)'
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: errorDetail ? '4px' : 0 }}>{error}</div>
-            {errorDetail && (
-              <div className="text-xs" style={{ color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                {errorDetail}
-              </div>
-            )}
+    <main className="login">
+      <div className="login-card page-enter">
+        <div className="stack" style={{ gap: 'var(--s-4)' }}>
+          <span className="login-mark" aria-hidden="true"><GraduationCapIcon size={30} /></span>
+          <div>
+            <h1 className="login-title">UniPlanner</h1>
+            <p className="muted" style={{ marginTop: 'var(--s-2)', fontSize: '1.0625rem' }}>
+              Dersin, notun, ödevin ve yoklaman tek yerde.
+            </p>
           </div>
-        )}
+        </div>
 
-        <button 
-          className="glass-button glass-button-primary" 
-          onClick={handleLogin}
-          disabled={isLoading}
-          aria-busy={isLoading}
-          style={{ width: '100%', padding: 'var(--space-md)', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-        >
-          {isLoading ? (
-            <div className="spinner" style={{ width: '22px', height: '22px', border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-          ) : (
-            <GoogleIcon size={22} />
+        <ul className="feature-list">
+          {FEATURES.map(({ icon: Icon, text }) => (
+            <li key={text}><span className="fi" aria-hidden="true"><Icon size={18} /></span>{text}</li>
+          ))}
+        </ul>
+
+        <div className="stack-sm">
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              <AlertCircleIcon size={18} />
+              <span><strong>{error.title}</strong>{error.detail}</span>
+            </div>
           )}
-          {isLoading ? 'Giriş yapılıyor...' : 'Google ile Giriş Yap'}
-        </button>
 
-        {showRedirectOption && (
           <button
-            className="glass-button text-xs text-secondary"
-            onClick={handleRedirectLogin}
-            disabled={isLoading}
-            style={{ width: '100%', marginTop: 'var(--space-sm)', minHeight: '36px' }}
+            type="button"
+            className="btn btn-block"
+            style={{ minHeight: 52, fontSize: '1rem' }}
+            onClick={() => run(signInWithGoogle)}
+            disabled={loading}
+            aria-busy={loading}
           >
-            Yönlendirme (Redirect) ile Giriş Yap
+            {loading ? <span className="spinner spinner-sm" aria-hidden="true" /> : <GoogleIcon size={20} />}
+            {loading ? 'Giriş yapılıyor…' : 'Google ile devam et'}
           </button>
-        )}
+
+          {showRedirect && (
+            <button type="button" className="btn btn-ghost btn-block" onClick={() => run(signInWithGoogleRedirect)} disabled={loading}>
+              Yönlendirme ile giriş yap
+            </button>
+          )}
+
+          <p className="subtle text-xs" style={{ textAlign: 'center', marginTop: 'var(--s-2)' }}>
+            Verilerin yalnızca senin hesabında saklanır.
+          </p>
+        </div>
       </div>
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
+    </main>
   );
-};
-
-export default LoginScreen;
-
+}

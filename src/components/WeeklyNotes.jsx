@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import useNotes from '../hooks/useNotes';
-import { SEMESTER_WEEKS } from '../utils/constants';
-import { SaveIcon } from '../icons/SVGIcons';
+import { CheckIcon, AlertCircleIcon } from '../icons/SVGIcons';
 
 const SAVE_DELAY = 1200; // ms — yazmayı bıraktıktan sonra otomatik kayıt
 
@@ -10,9 +9,10 @@ const SAVE_DELAY = 1200; // ms — yazmayı bıraktıktan sonra otomatik kayıt
  * @param {string} userId - Kullanıcı ID'si
  * @param {string} courseId - Ders ID'si
  */
-export default function WeeklyNotes({ userId, courseId }) {
+export default function WeeklyNotes({ userId, courseId, weeks, currentWeek }) {
   const { notes, saveNote, loading } = useNotes(userId, courseId);
-  const [activeWeek, setActiveWeek] = useState(1);
+  // Dönem başlangıcı ayarlıysa bu haftanın notuyla aç
+  const [activeWeek, setActiveWeek] = useState(() => (currentWeek >= 1 && currentWeek <= weeks ? currentWeek : 1));
   const [content, setContent] = useState('');
   const [status, setStatus] = useState(''); // '' | 'pending' | 'saved' | 'error'
 
@@ -87,66 +87,54 @@ export default function WeeklyNotes({ userId, courseId }) {
     notes.filter(n => n.content && n.content.trim()).map(n => Number(n.week))
   );
 
-  const statusText = {
-    pending: 'Kaydediliyor...',
-    saved: 'Kaydedildi ✓',
-    error: 'Kayıt hatası!'
-  }[status] || '';
+  const weekStripRef = useRef(null);
+  // Seçili hafta görünür olsun (yatay kaydırmalı listede)
+  useEffect(() => {
+    weekStripRef.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [activeWeek]);
 
   return (
-    <div className="weekly-notes flex-col gap-md">
-      {/* Hafta Seçici */}
-      <div className="week-selector flex gap-sm pb-2" style={{ flexWrap: 'wrap' }}>
-        {Array.from({ length: SEMESTER_WEEKS }, (_, i) => i + 1).map((week) => (
+    <div className="stack weekly-notes">
+      <div className="scroll-row week-pills" ref={weekStripRef} role="group" aria-label="Hafta seç">
+        {Array.from({ length: weeks }, (_, i) => i + 1).map((week) => (
           <button
             key={week}
-            className={`glass-button ${activeWeek === week ? 'text-white' : 'text-secondary'}`}
+            type="button"
+            className={`week-pill${week === currentWeek ? ' is-current' : ''}`}
             onClick={() => handleWeekChange(week)}
             aria-pressed={activeWeek === week}
-            style={{
-              ...(activeWeek === week ? { background: 'var(--glass-bg-active)' } : {}),
-              minHeight: '44px',
-              padding: '0 12px',
-              position: 'relative'
-            }}
+            aria-label={`${week}. hafta${weeksWithNotes.has(week) ? ', not var' : ''}${week === currentWeek ? ', bu hafta' : ''}`}
           >
-            {week}. Hafta
-            {weeksWithNotes.has(week) && (
-              <span
-                aria-label="not var"
-                style={{
-                  position: 'absolute', top: 6, right: 6, width: 6, height: 6,
-                  borderRadius: '50%', background: 'var(--accent-emerald)'
-                }}
-              />
-            )}
+            {week}
+            {weeksWithNotes.has(week) && <span className="has-note" aria-hidden="true" />}
           </button>
         ))}
       </div>
 
-      {/* Textarea */}
-      <div className="relative">
-        <div className="flex-between text-xs text-tertiary mb-2">
-          <span>{wordCount} kelime</span>
+      <div className="stack-sm">
+        <div className="row-between">
+          <label htmlFor="notes-editor" className="field-label">
+            {activeWeek}. hafta notları{activeWeek === currentWeek ? ' · bu hafta' : ''}
+          </label>
           <span
-            className={status === 'error' ? 'text-red-400' : 'text-emerald-400'}
-            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+            className={`save-state${status === 'saved' ? ' ok' : status === 'error' ? ' err' : ''}`}
+            aria-live="polite"
           >
-            {statusText && <SaveIcon size={14} />}
-            {statusText}
+            {status === 'pending' && <><span className="spinner spinner-sm" aria-hidden="true" /> Kaydediliyor…</>}
+            {status === 'saved' && <><CheckIcon size={14} /> Kaydedildi</>}
+            {status === 'error' && <><AlertCircleIcon size={14} /> Kaydedilemedi</>}
           </span>
         </div>
-
         <textarea
-          className="glass-textarea"
-          placeholder={loading ? 'Notlar yükleniyor...' : `${activeWeek}. Hafta notlarınızı buraya yazın...`}
+          id="notes-editor"
+          className="textarea notes-editor"
+          placeholder={loading ? 'Notlar yükleniyor…' : 'Derste neler işlendi? Önemli noktalar, sınav ipuçları, okuma listesi…'}
           value={content}
           onChange={handleChange}
           onBlur={flush}
           disabled={loading}
-          aria-label={`${activeWeek}. hafta notları`}
-          style={{ width: '100%', minHeight: '300px' }}
         />
+        <span className="subtle text-xs">{wordCount} kelime · yazdıkça otomatik kaydedilir</span>
       </div>
     </div>
   );

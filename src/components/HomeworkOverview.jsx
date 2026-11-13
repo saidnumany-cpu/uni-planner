@@ -1,218 +1,181 @@
-import { useState } from 'react'
-import { useAllHomework } from '../hooks/useAllHomework'
-import HomeworkModal from './HomeworkModal'
-import EmptyState from './EmptyState'
-import ConfirmDialog from './ConfirmDialog'
-import { getDueDateStatus, parseLocalDate } from '../utils/helpers'
-import { runInBackground } from '../utils/toast'
+import { useMemo, useState } from 'react';
+import HomeworkItem from './HomeworkItem';
+import HomeworkModal from './HomeworkModal';
+import EmptyState from './EmptyState';
+import { byDueDate } from './HomeworkList';
+import { getDueDateStatus } from '../utils/helpers';
+import useMediaQuery from '../hooks/useMediaQuery';
+import { ClipboardIcon, PlusIcon, CheckCircleIcon } from '../icons/SVGIcons';
 
-const byDueDate = (a, b) => {
-  const da = parseLocalDate(a.dueDate)
-  const db = parseLocalDate(b.dueDate)
-  if (!da && !db) return 0
-  if (!da) return 1
-  if (!db) return -1
-  return da - db
-}
+/** Bekleyen ödevleri teslim tarihine göre gruplar */
+const groupActive = (list) => {
+  const groups = [
+    { id: 'overdue', title: 'Gecikmiş', items: [] },
+    { id: 'soon', title: 'Bugün ve yarın', items: [] },
+    { id: 'week', title: 'Bu hafta', items: [] },
+    { id: 'later', title: 'Daha sonra', items: [] },
+    { id: 'nodate', title: 'Tarihsiz', items: [] }
+  ];
+  const by = Object.fromEntries(groups.map(g => [g.id, g]));
+  list.forEach(hw => {
+    const s = getDueDateStatus(hw.dueDate);
+    if (!s) by.nodate.items.push(hw);
+    else if (s.isOverdue) by.overdue.items.push(hw);
+    else if (s.diffDays <= 1) by.soon.items.push(hw);
+    else if (s.diffDays <= 7) by.week.items.push(hw);
+    else by.later.items.push(hw);
+  });
+  return groups.filter(g => g.items.length);
+};
 
-/**
- * Tüm dersler için ödev genel görünümü
- * Tüm aktif ödevleri tek bir listede gösterir
- */
-const HomeworkOverview = ({ courses, coursesLoading = false, userId }) => {
-  const { homeworkByCourse, loading, addHomework, updateHomework, toggleComplete, deleteHomework } = useAllHomework(userId, courses)
+/** Tüm derslerin ödevleri */
+export default function HomeworkOverview({ courses, coursesLoading, homework, loading, actions, onAddCourse }) {
+  const wide = useMediaQuery('(min-width: 768px)');
+  const [view, setView] = useState('active');
+  const [courseFilter, setCourseFilter] = useState('all');
+  const [modal, setModal] = useState({ open: false, hw: null });
 
-  return (
-    <div className="animate-fade-in">
-      <div className="flex-between" style={{ marginBottom: 'var(--space-lg)' }}>
-        <h1>📝 Ödevler</h1>
+  const courseById = useMemo(() => Object.fromEntries(courses.map(c => [c.id, c])), [courses]);
+  const filtered = homework
+    .filter(hw => courseById[hw.courseId])
+    .filter(hw => courseFilter === 'all' || hw.courseId === courseFilter);
+  const active = filtered.filter(h => !h.isCompleted).sort(byDueDate);
+  const done = filtered.filter(h => h.isCompleted).sort(byDueDate).reverse();
+  const groups = view === 'active' ? groupActive(active) : [{ id: 'done', title: '', items: done }];
+
+  const open = (hw = null) => setModal({ open: true, hw });
+  const close = () => setModal({ open: false, hw: null });
+
+  const header = (
+    <header className="page-header">
+      <div>
+        <h1>Ödevler</h1>
+        <p>{active.length ? `${active.length} bekleyen ödevin var` : 'Tüm ödevlerin tamam'}</p>
       </div>
-
-      {coursesLoading ? (
-        <div className="flex-center" style={{ padding: 'var(--space-xl)' }}>
-          <div className="loading-spinner" />
-        </div>
-      ) : courses.length === 0 ? (
-        <EmptyState
-          icon="📝"
-          title="Henüz ders eklenmedi"
-          description="Önce ders eklemeniz gerekiyor"
-        />
-      ) : loading ? (
-        <div className="text-center" style={{ padding: 'var(--space-xl)' }}>
-          <p className="text-secondary">Ödevler yükleniyor...</p>
-        </div>
-      ) : (
-        <div className="flex-col gap-md">
-          {courses.map(course => (
-            <CourseHomeworkSection
-              key={course.id}
-              course={course}
-              homework={homeworkByCourse[course.id] || []}
-              onAdd={(data) => runInBackground(addHomework(course.id, data), 'Ödev eklenemedi')}
-              onUpdate={(hwId, data) => runInBackground(updateHomework(course.id, hwId, data), 'Ödev güncellenemedi')}
-              onToggle={(hwId, state) => runInBackground(toggleComplete(course.id, hwId, state), 'Ödev güncellenemedi')}
-              onDelete={(hwId) => runInBackground(deleteHomework(course.id, hwId), 'Ödev silinemedi')}
-            />
-          ))}
-        </div>
+      {wide && courses.length > 0 && (
+        <button type="button" className="btn btn-primary" onClick={() => open()}>
+          <PlusIcon size={18} /> Ödev ekle
+        </button>
       )}
-    </div>
-  )
-}
+    </header>
+  );
 
-/** Tek bir ders için ödev bölümü */
-const CourseHomeworkSection = ({ course, homework, onAdd, onUpdate, onToggle, onDelete }) => {
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [toDelete, setToDelete] = useState(null)
+  if (coursesLoading || loading) {
+    return (
+      <div className="page-enter">
+        {header}
+        <div className="skeleton" style={{ height: 240 }} aria-label="Yükleniyor" />
+      </div>
+    );
+  }
 
-  const openNew = () => { setEditing(null); setModalOpen(true) }
-  const openEdit = (hw) => { setEditing(hw); setModalOpen(true) }
-  const closeModal = () => { setModalOpen(false); setEditing(null) }
-
-  const activeHomework = homework.filter(hw => !hw.isCompleted).sort(byDueDate)
-  const completedHomework = homework.filter(hw => hw.isCompleted)
-
-  const getDueDateLabel = (dueDate) => {
-    const status = getDueDateStatus(dueDate)
-    if (!status) return null
-
-    const dateStr = status.due.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
-
-    if (status.isOverdue) return { text: `${dateStr} (Geçti)`, className: 'badge badge-danger' }
-    if (status.isUrgent) return { text: `${dateStr} (${status.diffDays} gün)`, className: 'badge badge-warning' }
-    return { text: dateStr, className: 'badge' }
+  if (courses.length === 0) {
+    return (
+      <div className="page-enter">
+        <header className="page-header"><h1>Ödevler</h1></header>
+        <div className="card">
+          <EmptyState
+            icon={<ClipboardIcon size={26} />}
+            title="Önce bir ders ekle"
+            description="Ödevler derslere bağlıdır. İlk dersini ekledikten sonra ödevlerini buradan takip edebilirsin."
+            action={<button type="button" className="btn btn-primary" onClick={onAddCourse}><PlusIcon size={18} /> Ders ekle</button>}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="glass glass-card">
-      <div className="flex-between" style={{ marginBottom: 'var(--space-md)' }}>
-        <div className="flex gap-sm" style={{ alignItems: 'center' }}>
-          <div
-            className="color-dot"
-            style={{ backgroundColor: course.color, width: '12px', height: '12px', minWidth: '12px' }}
-          />
-          <h3 style={{ margin: 0 }}>{course.name}</h3>
-          <span className="text-xs text-tertiary">
-            {activeHomework.length} aktif
-          </span>
+    <div className="page-enter">
+      {header}
+
+      <div className="stack" style={{ marginBottom: 'var(--s-5)' }}>
+        <div className="segmented" role="tablist" aria-label="Ödev durumu" style={{ maxWidth: 420 }}>
+          <button type="button" role="tab" aria-selected={view === 'active'} onClick={() => setView('active')}>
+            Bekleyen <span className="count">{filtered.filter(h => !h.isCompleted).length}</span>
+          </button>
+          <button type="button" role="tab" aria-selected={view === 'done'} onClick={() => setView('done')}>
+            Tamamlanan <span className="count">{filtered.filter(h => h.isCompleted).length}</span>
+          </button>
         </div>
-        <button
-          className="glass-button glass-button-icon"
-          onClick={openNew}
-          title="Ödev Ekle"
-          aria-label={`${course.name} dersine ödev ekle`}
-        >
-          +
-        </button>
+
+        {courses.length > 1 && (
+          <div className="scroll-row" role="group" aria-label="Derse göre filtrele">
+            <button type="button" className="chip" aria-pressed={courseFilter === 'all'} onClick={() => setCourseFilter('all')}>
+              Tüm dersler
+            </button>
+            {courses.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                className="chip"
+                aria-pressed={courseFilter === c.id}
+                onClick={() => setCourseFilter(courseFilter === c.id ? 'all' : c.id)}
+              >
+                <span className="color-dot" style={{ background: c.color }} aria-hidden="true" />
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {homework.length === 0 ? (
-        <p className="text-sm text-tertiary" style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
-          Bu ders için henüz ödev yok
-        </p>
-      ) : (
-        <div className="flex-col gap-sm">
-          {activeHomework.map(hw => {
-            const dueBadge = getDueDateLabel(hw.dueDate)
-            return (
-              <div key={hw.id} className="homework-item">
-                <div className="flex gap-sm" style={{ alignItems: 'flex-start', flex: 1 }}>
-                  <button
-                    className="attendance-toggle"
-                    onClick={() => onToggle(hw.id, hw.isCompleted)}
-                    title="Tamamla"
-                    aria-label={`${hw.title} ödevini tamamla`}
-                  />
-                  <div
-                    style={{ flex: 1, cursor: 'pointer' }}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openEdit(hw)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') openEdit(hw) }}
-                  >
-                    <div className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 500 }}>{hw.title}</span>
-                      {dueBadge && <span className={dueBadge.className}>{dueBadge.text}</span>}
-                    </div>
-                    {hw.description && (
-                      <p className="text-sm text-secondary" style={{ marginTop: 'var(--space-xs)' }}>
-                        {hw.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <button
-                  className="glass-button glass-button-icon text-tertiary"
-                  onClick={() => setToDelete(hw)}
-                  title="Sil"
-                  aria-label={`${hw.title} ödevini sil`}
-                  style={{ fontSize: '0.85rem' }}
-                >
-                  🗑
-                </button>
-              </div>
-            )
-          })}
-
-          {completedHomework.length > 0 && (
-            <>
-              <div className="text-xs text-tertiary" style={{ padding: 'var(--space-xs) 0', marginTop: 'var(--space-sm)' }}>
-                Tamamlanan ({completedHomework.length})
-              </div>
-              {completedHomework.map(hw => (
-                <div key={hw.id} className="homework-item completed">
-                  <div className="flex gap-sm" style={{ alignItems: 'center', flex: 1 }}>
-                    <button
-                      className="attendance-toggle checked"
-                      onClick={() => onToggle(hw.id, hw.isCompleted)}
-                      title="Geri Al"
-                      aria-label={`${hw.title} ödevini geri al`}
-                    />
-                    <span style={{ fontWeight: 400, textDecoration: 'line-through', opacity: 0.5 }}>
-                      {hw.title}
-                    </span>
-                  </div>
-                  <button
-                    className="glass-button glass-button-icon text-tertiary"
-                    onClick={() => setToDelete(hw)}
-                    title="Sil"
-                    aria-label={`${hw.title} ödevini sil`}
-                    style={{ fontSize: '0.85rem' }}
-                  >
-                    🗑
-                  </button>
-                </div>
-              ))}
-            </>
+      {groups.length === 0 || groups.every(g => g.items.length === 0) ? (
+        <div className="card">
+          {view === 'active' ? (
+            <EmptyState
+              compact
+              icon={<CheckCircleIcon size={24} />}
+              title="Bekleyen ödev yok"
+              description="Yeni bir ödev aldığında ekle; teslim tarihi yaklaştıkça burada öne çıkar."
+              action={<button type="button" className="btn btn-primary" onClick={() => open()}><PlusIcon size={18} /> Ödev ekle</button>}
+            />
+          ) : (
+            <EmptyState compact icon={<ClipboardIcon size={24} />} title="Henüz tamamlanan ödev yok" />
           )}
         </div>
+      ) : (
+        groups.map(g => (
+          <section key={g.id} className="hw-group" aria-label={g.title || 'Tamamlanan ödevler'}>
+            {g.title && (
+              <h2 className="section-title" style={g.id === 'overdue' ? { color: 'var(--danger)' } : undefined}>
+                {g.title} · {g.items.length}
+              </h2>
+            )}
+            <div className="hw-list">
+              {g.items.map(hw => (
+                <HomeworkItem
+                  key={hw.id}
+                  hw={hw}
+                  course={courseFilter === 'all' ? courseById[hw.courseId] : null}
+                  onToggle={actions.toggle}
+                  onEdit={open}
+                />
+              ))}
+            </div>
+          </section>
+        ))
+      )}
+
+      {!wide && (
+        <button type="button" className="fab" onClick={() => open()} aria-label="Ödev ekle">
+          <PlusIcon size={22} /> Ödev
+        </button>
       )}
 
       <HomeworkModal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        onSave={(data) => {
-          if (editing) onUpdate(editing.id, data)
-          else onAdd(data)
-          closeModal()
+        isOpen={modal.open}
+        homework={modal.hw}
+        courses={courses}
+        courseId={courseFilter !== 'all' ? courseFilter : undefined}
+        onClose={close}
+        onSave={(data, courseId) => {
+          if (modal.hw) actions.update(modal.hw, data);
+          else actions.add(courseId, data);
+          close();
         }}
-        homework={editing}
-      />
-
-      <ConfirmDialog
-        isOpen={!!toDelete}
-        title="Ödevi Sil"
-        message={`"${toDelete?.title || ''}" ödevini silmek istediğinizden emin misiniz?`}
-        onConfirm={() => { onDelete(toDelete.id); setToDelete(null) }}
-        onCancel={() => setToDelete(null)}
-        confirmText="Sil"
-        cancelText="İptal"
-        variant="danger"
+        onDelete={(hw) => { actions.remove(hw); close(); }}
       />
     </div>
-  )
+  );
 }
-
-export default HomeworkOverview

@@ -3,6 +3,16 @@
 Üniversite ders programı, haftalık notlar, ödev takibi ve yoklama yönetimi için PWA.
 React 19 + Vite + Firebase (Auth + Firestore).
 
+## Özellikler
+
+- **Program:** Telefonda günlük ajanda, geniş ekranda haftalık ızgara (şu anki saat çizgisi,
+  çakışan dersler yan yana, hafta sonu dersleri). Bir ders haftada birden fazla gün/saatte olabilir.
+- **Bugün paneli:** Günün dersleri ve yaklaşan ödevler.
+- **Ders detayı:** Haftalık notlar (otomatik kayıt), ödevler, yoklama + devamsızlık hakkı uyarısı.
+- **Ödevler:** Teslim tarihine göre gruplanmış (gecikmiş, bugün/yarın, bu hafta…), derse göre filtre.
+- **Özet:** Genel devam oranı, devamsızlık sınırına yaklaşan dersler, ödev ilerlemesi.
+- **Ayarlar:** Açık/koyu/sistem teması, dönem başlangıcı ve hafta sayısı (bulunulan hafta otomatik işaretlenir).
+
 ## Geliştirme
 
 ```bash

@@ -1,175 +1,154 @@
-import { useAllAttendance } from '../hooks/useAllAttendance'
-import { useAllHomework } from '../hooks/useAllHomework'
-import EmptyState from './EmptyState'
-import { SEMESTER_WEEKS } from '../utils/constants'
+import EmptyState from './EmptyState';
+import { absenceSummary } from './AttendanceTracker';
+import { getAbsenceLimit, formatSessions } from '../utils/course';
+import { useSettings } from '../contexts/SettingsContext';
+import { ChartIcon, ChevronRightIcon, PlusIcon } from '../icons/SVGIcons';
 
-/**
- * Genel istatistik ve özet sayfası
- * Tüm derslerin yoklama ve ödev durumlarını gösterir
- */
-const StatsOverview = ({ courses, coursesLoading = false, userId }) => {
-  const { attendanceByCourse, loading: attLoading } = useAllAttendance(userId, courses, SEMESTER_WEEKS)
-  const { homeworkByCourse, loading: hwLoading } = useAllHomework(userId, courses)
+const rateTone = (pct, recorded) => !recorded ? '' : pct >= 70 ? 'success' : pct >= 50 ? 'warning' : 'danger';
+
+/** Tek ders özeti */
+function CourseStatCard({ course, attendance, homework, weeks, onOpen }) {
+  const stats = attendance?.stats || { attended: 0, missed: 0, percentage: 0 };
+  const recorded = stats.attended + stats.missed;
+  const limit = getAbsenceLimit(course);
+  const summary = absenceSummary(stats.missed, limit);
+  const doneHw = homework.filter(h => h.isCompleted).length;
+
+  return (
+    <button
+      type="button"
+      className="card"
+      onClick={() => onOpen(course)}
+      style={{ textAlign: 'left', width: '100%', color: 'inherit', borderLeft: `4px solid ${course.color || 'var(--primary)'}` }}
+      aria-label={`${course.name} dersini aç`}
+    >
+      <div className="row-between" style={{ marginBottom: 'var(--s-4)' }}>
+        <div className="grow">
+          <h3 className="truncate">{course.name}</h3>
+          <p className="subtle text-sm truncate">{formatSessions(course)}</p>
+        </div>
+        <ChevronRightIcon size={20} className="subtle" />
+      </div>
+
+      <div className="stack-sm">
+        <div className="row-between text-sm">
+          <span className="muted">Devam ({recorded}/{weeks} hafta girildi)</span>
+          <strong className={`tabular ${rateTone(stats.percentage, recorded) ? `stat-value ${rateTone(stats.percentage, recorded)}` : ''}`} style={{ fontSize: '0.9375rem' }}>
+            {recorded ? `%${stats.percentage}` : '—'}
+          </strong>
+        </div>
+        <div className="progress" aria-hidden="true">
+          <span style={{ width: `${(stats.attended / weeks) * 100}%`, background: 'var(--success-solid)' }} />
+          <span style={{ width: `${(stats.missed / weeks) * 100}%`, background: 'var(--danger-solid)' }} />
+        </div>
+        <dl className="kv" style={{ marginTop: 'var(--s-2)' }}>
+          <dt>Devamsızlık</dt>
+          <dd>
+            <span className={`badge ${summary.tone ? `badge-${summary.tone}` : ''}`}>
+              {stats.missed}{limit > 0 ? ` / ${limit}` : ''}
+            </span>
+          </dd>
+          <dt>Ödevler</dt>
+          <dd>{homework.length ? `${doneHw}/${homework.length} tamamlandı` : '—'}</dd>
+        </dl>
+      </div>
+    </button>
+  );
+}
+
+/** Özet sayfası */
+export default function StatsOverview({ courses, coursesLoading, homework, attendanceByCourse, loading, onOpenCourse, onAddCourse }) {
+  const { weeks } = useSettings();
 
   if (coursesLoading) {
-    return (
-      <div className="flex-center" style={{ padding: 'var(--space-xl)' }}>
-        <div className="loading-spinner" />
-      </div>
-    )
+    return <div className="page-enter"><header className="page-header"><h1>Özet</h1></header><div className="skeleton" style={{ height: 320 }} /></div>;
   }
 
   if (courses.length === 0) {
     return (
-      <div className="animate-fade-in">
-        <h1 style={{ marginBottom: 'var(--space-lg)' }}>📊 Özet</h1>
-        <EmptyState
-          icon="📊"
-          title="Henüz veri yok"
-          description="Ders ekleyerek istatistikleri görüntüleyin"
-        />
+      <div className="page-enter">
+        <header className="page-header"><h1>Özet</h1></header>
+        <div className="card">
+          <EmptyState
+            icon={<ChartIcon size={26} />}
+            title="Henüz gösterilecek veri yok"
+            description="Ders ekleyip yoklama ve ödevleri girdikçe dönem özetin burada oluşur."
+            action={<button type="button" className="btn btn-primary" onClick={onAddCourse}><PlusIcon size={18} /> Ders ekle</button>}
+          />
+        </div>
       </div>
-    )
+    );
   }
 
-  const isLoading = attLoading || hwLoading;
-
-  // Genel özet: tüm derslerdeki toplam katılım ve bekleyen ödevler
   const totals = Object.values(attendanceByCourse).reduce(
     (acc, { stats }) => ({ attended: acc.attended + stats.attended, missed: acc.missed + stats.missed }),
     { attended: 0, missed: 0 }
   );
   const recorded = totals.attended + totals.missed;
-  const overallRate = recorded > 0 ? Math.round((totals.attended / recorded) * 100) : null;
-  const pendingHomework = Object.values(homeworkByCourse).flat().filter(hw => !hw.isCompleted).length;
+  const overall = recorded ? Math.round((totals.attended / recorded) * 100) : null;
+  const pending = homework.filter(h => !h.isCompleted).length;
+  const done = homework.filter(h => h.isCompleted).length;
+  const atRisk = courses.filter(c => {
+    const missed = attendanceByCourse[c.id]?.stats.missed || 0;
+    const limit = getAbsenceLimit(c);
+    return limit > 0 && limit - missed <= 1;
+  });
 
   return (
-    <div className="animate-fade-in">
-      <h1 style={{ marginBottom: 'var(--space-lg)' }}>📊 Özet</h1>
+    <div className="page-enter">
+      <header className="page-header">
+        <div>
+          <h1>Özet</h1>
+          <p>Dönem genelinde devam ve ödev durumun</p>
+        </div>
+      </header>
 
-      {/* Genel İstatistikler */}
-      <div className="glass glass-card" style={{ marginBottom: 'var(--space-lg)' }}>
-        <h3 style={{ margin: '0 0 var(--space-md)' }}>Genel Bilgiler</h3>
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-number">{courses.length}</div>
-            <div className="stat-label">Toplam Ders</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-number">{isLoading || overallRate === null ? '—' : `%${overallRate}`}</div>
-            <div className="stat-label">Genel Devam</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-number">{isLoading ? '—' : pendingHomework}</div>
-            <div className="stat-label">Bekleyen Ödev</div>
-          </div>
+      <div className="stat-grid" style={{ marginBottom: 'var(--s-6)' }}>
+        <div className="stat">
+          <span className="stat-label">Ders</span>
+          <span className="stat-value">{courses.length}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Genel devam</span>
+          <span className={`stat-value ${loading ? '' : rateTone(overall, recorded)}`}>{loading || overall === null ? '—' : `%${overall}`}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Bekleyen ödev</span>
+          <span className={`stat-value ${pending ? 'warning' : ''}`}>{loading ? '—' : pending}</span>
+        </div>
+        <div className="stat">
+          <span className="stat-label">Tamamlanan ödev</span>
+          <span className="stat-value success">{loading ? '—' : done}</span>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="text-center" style={{ padding: 'var(--space-xl)' }}>
-          <p className="text-secondary">İstatistikler yükleniyor...</p>
+      {!loading && atRisk.length > 0 && (
+        <div className="alert alert-warning" role="status" style={{ marginBottom: 'var(--s-6)' }}>
+          <ChartIcon size={18} />
+          <span>
+            <strong>Devamsızlık sınırına yakın {atRisk.length === 1 ? 'ders' : 'dersler'}</strong>
+            {atRisk.map(c => c.name).join(', ')}
+          </span>
         </div>
+      )}
+
+      <h2 className="section-title">Dersler</h2>
+      {loading ? (
+        <div className="skeleton" style={{ height: 200 }} aria-label="Yükleniyor" />
       ) : (
-        <div className="flex-col gap-md">
+        <div className="course-stats">
           {courses.map(course => (
             <CourseStatCard
               key={course.id}
               course={course}
-              attendanceData={attendanceByCourse[course.id]}
-              homework={homeworkByCourse[course.id] || []}
+              attendance={attendanceByCourse[course.id]}
+              homework={homework.filter(h => h.courseId === course.id)}
+              weeks={weeks}
+              onOpen={onOpenCourse}
             />
           ))}
         </div>
       )}
     </div>
-  )
+  );
 }
-
-/** Tek bir ders için istatistik kartı */
-const CourseStatCard = ({ course, attendanceData, homework }) => {
-  const stats = attendanceData?.stats || { total: SEMESTER_WEEKS, attended: 0, missed: 0, percentage: 0 };
-  
-  const completedHw = homework.filter(hw => hw.isCompleted).length
-  const totalHw = homework.length
-
-  return (
-    <div className="glass glass-card">
-      <div className="flex gap-sm" style={{ alignItems: 'center', marginBottom: 'var(--space-md)' }}>
-        <div
-          style={{
-            width: '8px',
-            height: '32px',
-            borderRadius: '4px',
-            backgroundColor: course.color
-          }}
-        />
-        <div>
-          <h3 style={{ margin: 0 }}>{course.name}</h3>
-          <span className="text-xs text-secondary">
-            {course.day} · {course.startTime} - {course.endTime}
-          </span>
-        </div>
-      </div>
-
-      <div className="stats-grid">
-        {/* Yoklama */}
-        <div className="stat-card">
-          <div className="stat-number" style={{
-            color: stats.percentage >= 70 ? 'var(--accent-emerald)' :
-                   stats.percentage >= 50 ? 'var(--accent-amber)' :
-                   stats.attended + stats.missed > 0 ? 'var(--accent-red)' : 'var(--text-primary)'
-          }}>
-            {stats.attended + stats.missed > 0 ? `%${Math.round(stats.percentage)}` : '—'}
-          </div>
-          <div className="stat-label">Devam Oranı</div>
-        </div>
-
-        {/* Devamsızlık */}
-        <div className="stat-card">
-          <div className="stat-number" style={{
-            color: stats.missed > 3 ? 'var(--accent-red)' :
-                   stats.missed > 0 ? 'var(--accent-amber)' : 'var(--text-primary)'
-          }}>
-            {stats.missed}
-          </div>
-          <div className="stat-label">Devamsızlık</div>
-        </div>
-
-        {/* Ödev */}
-        <div className="stat-card">
-          <div className="stat-number">
-            {totalHw > 0 ? `${completedHw}/${totalHw}` : '—'}
-          </div>
-          <div className="stat-label">Ödev</div>
-        </div>
-      </div>
-
-      {/* İlerleme çubuğu (yoklama) */}
-      {stats.attended + stats.missed > 0 && (
-        <div style={{ marginTop: 'var(--space-md)' }}>
-          <div className="flex-between text-xs text-secondary" style={{ marginBottom: 'var(--space-xs)' }}>
-            <span>Yoklama İlerlemesi</span>
-            <span>{stats.attended + stats.missed} / {SEMESTER_WEEKS} hafta</span>
-          </div>
-          <div style={{
-            height: '6px',
-            borderRadius: '3px',
-            backgroundColor: 'rgba(255,255,255,0.08)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              height: '100%',
-              borderRadius: '3px',
-              width: `${((stats.attended + stats.missed) / SEMESTER_WEEKS) * 100}%`,
-              background: `linear-gradient(90deg, var(--accent-emerald) ${stats.percentage}%, var(--accent-red) ${stats.percentage}%)`,
-              transition: 'width 0.5s ease'
-            }} />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-export default StatsOverview

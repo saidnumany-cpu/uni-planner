@@ -1,117 +1,118 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import WeeklyNotes from './WeeklyNotes';
 import HomeworkList from './HomeworkList';
 import AttendanceTracker from './AttendanceTracker';
-import { BookOpenIcon, ClipboardIcon, CheckCircleIcon, ChevronLeftIcon } from '../icons/SVGIcons';
+import { getSessions, getAbsenceLimit } from '../utils/course';
+import { useSettings } from '../contexts/SettingsContext';
+import { ChevronLeftIcon, EditIcon, ClockIcon, MapPinIcon, UserIcon, BookOpenIcon, ClipboardIcon, CheckCircleIcon } from '../icons/SVGIcons';
 
-/**
- * Tek bir ders için detay görünümü
- * @param {Object} course - Ders objesi
- * @param {string} userId - Kullanıcı ID'si
- * @param {Function} onBack - Geri dönme fonksiyonu
- * @param {Function} onEditCourse - Dersi düzenleme fonksiyonu
- */
-export default function CourseDetail({ course, userId, onBack, onEditCourse }) {
-  const [activeTab, setActiveTab] = useState('notes');
+const TABS = [
+  { id: 'notes', label: 'Notlar', icon: BookOpenIcon },
+  { id: 'homework', label: 'Ödevler', icon: ClipboardIcon },
+  { id: 'attendance', label: 'Yoklama', icon: CheckCircleIcon }
+];
 
-  if (!course) return null;
+/** Ders detay sayfası: bilgiler + Notlar / Ödevler / Yoklama sekmeleri */
+export default function CourseDetail({ course, userId, homework, attendance, onSetAttendance, homeworkActions, onBack, backLabel = 'Program', onEdit, initialTab = 'notes' }) {
+  const [tab, setTab] = useState(initialTab);
+  const { weeks, currentWeek } = useSettings();
+  const sessions = getSessions(course);
+  const pending = homework.filter(h => !h.isCompleted).length;
+  const stats = attendance?.stats || { attended: 0, missed: 0, percentage: 0 };
+  const missedOver = stats.missed >= getAbsenceLimit(course) && getAbsenceLimit(course) > 0;
+
+  const counts = {
+    homework: pending || null,
+    attendance: missedOver ? '!' : null
+  };
+
+  const onTabKey = (e, index) => {
+    let next = null;
+    if (e.key === 'ArrowRight') next = (index + 1) % TABS.length;
+    if (e.key === 'ArrowLeft') next = (index - 1 + TABS.length) % TABS.length;
+    if (next !== null) {
+      e.preventDefault();
+      setTab(TABS[next].id);
+      document.getElementById(`ctab-${TABS[next].id}`)?.focus();
+    }
+  };
 
   return (
-    <div className="course-detail animate-fade-in pb-20">
-      {/* Header */}
-      <div className="flex-between mb-4">
-        <button 
-          className="glass-button flex items-center gap-xs" 
-          onClick={onBack}
-          style={{ minHeight: '44px', minWidth: '44px' }}
-        >
-          <ChevronLeftIcon size={20} />
-          <span>Geri</span>
+    <div className="stack page-enter" style={{ gap: 'var(--s-5)' }}>
+      <div>
+        <button type="button" className="back-link" onClick={onBack}>
+          <ChevronLeftIcon size={20} /> {backLabel}
         </button>
       </div>
 
-      {/* Ders Bilgileri */}
-      <div 
-        className="glass-card mb-6"
-        style={{ borderTop: `4px solid ${course.color || 'var(--accent-purple)'}` }}
-      >
-        <div className="flex-between">
-          <h2>{course.name}</h2>
-          <button 
-            className="glass-button glass-button-icon" 
-            onClick={() => onEditCourse(course)} 
-            aria-label="Dersi düzenle"
-            style={{ minHeight: '44px', minWidth: '44px' }}
-          >
-            ✏️
+      <section className="card course-hero" style={{ '--c': course.color || 'var(--primary)' }}>
+        <div className="row-between" style={{ alignItems: 'flex-start' }}>
+          <div className="grow">
+            <h1>{course.name}</h1>
+            {course.instructor && (
+              <p className="meta" style={{ marginTop: 'var(--s-2)' }}><UserIcon size={16} />{course.instructor}</p>
+            )}
+          </div>
+          <button type="button" className="btn btn-sm" onClick={() => onEdit(course)}>
+            <EditIcon size={16} /> Düzenle
           </button>
         </div>
-        
-        <p className="text-secondary mb-3">{course.instructor}</p>
-        
-        <div className="flex gap-md text-sm text-tertiary">
-          <div className="flex items-center gap-xs">
-            🕒 {course.day} {course.startTime}-{course.endTime}
-          </div>
-          <div className="flex items-center gap-xs">
-            📍 {course.location || 'Belirtilmedi'}
-          </div>
+        <div className="session-list">
+          {sessions.map((s, i) => (
+            <span key={i} className="chip" style={{ cursor: 'default' }}>
+              <ClockIcon size={14} />
+              <span className="tabular">{s.day} {s.startTime}–{s.endTime}</span>
+              {(s.location || course.location) && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <MapPinIcon size={14} />
+                  {s.location || course.location}
+                </>
+              )}
+            </span>
+          ))}
         </div>
+      </section>
+
+      <div className="segmented" role="tablist" aria-label="Ders bölümleri">
+        {TABS.map((t, i) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              id={`ctab-${t.id}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              aria-controls={`cpanel-${t.id}`}
+              tabIndex={tab === t.id ? 0 : -1}
+              onClick={() => setTab(t.id)}
+              onKeyDown={(e) => onTabKey(e, i)}
+            >
+              <Icon size={18} />
+              {t.label}
+              {counts[t.id] && <span className="count">{counts[t.id]}</span>}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tabs */}
-      <div className="tabs glass" role="tablist" aria-label="Course Sections">
-        <button 
-          role="tab"
-          aria-selected={activeTab === 'notes'}
-          aria-controls="panel-notes"
-          id="tab-notes"
-          className={`tab flex-center gap-xs ${activeTab === 'notes' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notes')}
-          style={{ minHeight: '44px' }}
-        >
-          <BookOpenIcon size={18} /> Notlar
-        </button>
-        <button 
-          role="tab"
-          aria-selected={activeTab === 'homework'}
-          aria-controls="panel-homework"
-          id="tab-homework"
-          className={`tab flex-center gap-xs ${activeTab === 'homework' ? 'active' : ''}`}
-          onClick={() => setActiveTab('homework')}
-          style={{ minHeight: '44px' }}
-        >
-          <ClipboardIcon size={18} /> Ödevler
-        </button>
-        <button 
-          role="tab"
-          aria-selected={activeTab === 'attendance'}
-          aria-controls="panel-attendance"
-          id="tab-attendance"
-          className={`tab flex-center gap-xs ${activeTab === 'attendance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('attendance')}
-          style={{ minHeight: '44px' }}
-        >
-          <CheckCircleIcon size={18} /> Yoklama
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      <div className="tab-content animate-slide-up">
-        {activeTab === 'notes' && (
-          <div id="panel-notes" role="tabpanel" aria-labelledby="tab-notes" tabIndex={0}>
-            <WeeklyNotes userId={userId} courseId={course.id} />
-          </div>
+      <div id={`cpanel-${tab}`} role="tabpanel" aria-labelledby={`ctab-${tab}`}>
+        {tab === 'notes' && (
+          <WeeklyNotes key={course.id} userId={userId} courseId={course.id} weeks={weeks} currentWeek={currentWeek} />
         )}
-        {activeTab === 'homework' && (
-          <div id="panel-homework" role="tabpanel" aria-labelledby="tab-homework" tabIndex={0}>
-            <HomeworkList userId={userId} courseId={course.id} />
-          </div>
+        {tab === 'homework' && (
+          <HomeworkList course={course} homework={homework} actions={homeworkActions} />
         )}
-        {activeTab === 'attendance' && (
-          <div id="panel-attendance" role="tabpanel" aria-labelledby="tab-attendance" tabIndex={0}>
-            <AttendanceTracker userId={userId} courseId={course.id} />
-          </div>
+        {tab === 'attendance' && (
+          <AttendanceTracker
+            course={course}
+            records={attendance?.records || []}
+            stats={stats}
+            weeks={weeks}
+            currentWeek={currentWeek}
+            onSet={(week, attended, note) => onSetAttendance(course.id, week, attended, note)}
+          />
         )}
       </div>
     </div>

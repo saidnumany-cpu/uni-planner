@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { 
   collection, doc, setDoc, onSnapshot, serverTimestamp, query 
 } from 'firebase/firestore';
-import { SEMESTER_WEEKS } from '../utils/constants';
+import { DEFAULT_SEMESTER_WEEKS } from '../utils/constants';
 
 /**
  * Tüm derslerin yoklama işlemlerini tek bir hook ile yönetir
@@ -11,7 +11,7 @@ import { SEMESTER_WEEKS } from '../utils/constants';
  * @param {Array} courses - Kullanıcının dersleri
  * @param {number} totalWeeks - Toplam hafta sayısı
  */
-export const useAllAttendance = (userId, courses, totalWeeks = SEMESTER_WEEKS) => {
+export const useAllAttendance = (userId, courses, totalWeeks = DEFAULT_SEMESTER_WEEKS) => {
   const [attendanceDataByCourse, setAttendanceDataByCourse] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -90,7 +90,8 @@ export const useAllAttendance = (userId, courses, totalWeeks = SEMESTER_WEEKS) =
     const result = {};
     for (const course of courses) {
       const courseId = course.id;
-      const records = attendanceDataByCourse[courseId] || [];
+      // Dönem hafta sayısı azaltıldıysa aralık dışındaki eski kayıtları sayma
+      const records = (attendanceDataByCourse[courseId] || []).filter(r => Number(r.week) >= 1 && Number(r.week) <= totalWeeks);
       
       const attendedWeeks = records.filter(record => record.attended === true).length;
       const missedWeeks = records.filter(record => record.attended === false).length;

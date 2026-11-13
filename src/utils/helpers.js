@@ -1,4 +1,3 @@
-import { DAYS, TIME_SLOTS } from './constants';
 
 /**
  * Formatlar zamanı, örn: '09:00' -> '09:00'
@@ -12,22 +11,21 @@ export const formatTime = (time) => time;
  * @param {Date|string|number} semesterStart - Dönem başlangıç tarihi
  * @returns {number} Mevcut hafta numarası (1-14 arası)
  */
-export const getCurrentWeek = (semesterStart) => {
-  const start = new Date(semesterStart);
+export const getCurrentWeek = (semesterStart, totalWeeks) => {
+  const start = parseLocalDate(semesterStart);
+  if (!start || Number.isNaN(start.getTime())) return null;
+  start.setHours(0, 0, 0, 0);
   const now = new Date();
-  const diffTime = Math.abs(now - start);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return Math.max(1, Math.ceil(diffDays / 7));
+  now.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return 0; // dönem henüz başlamadı
+  const week = Math.floor(diffDays / 7) + 1;
+  return totalWeeks && week > totalWeeks ? totalWeeks + 1 : week; // totalWeeks+1 = dönem bitti
 };
 
-/**
- * Zamanın indeksini döner
- * @param {string} time - '08:00' gibi bir saat stringi
- * @returns {number} TIME_SLOTS içindeki indeksi
- */
-export const getTimeSlotIndex = (time) => {
-  return TIME_SLOTS.indexOf(time);
-};
+/** Yerel tarihi 'YYYY-MM-DD' formatına çevirir */
+export const toDateInputValue = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 /**
  * Rastgele ID üretir
@@ -46,15 +44,6 @@ export const generateId = () => {
 export const sortByTime = (a, b) => {
   if (!a.startTime || !b.startTime) return 0;
   return a.startTime.localeCompare(b.startTime);
-};
-
-/**
- * Günün indeksini döner
- * @param {string} day - Gün adı
- * @returns {number} DAYS içindeki indeksi
- */
-export const getDayIndex = (day) => {
-  return DAYS.indexOf(day);
 };
 
 /**
@@ -111,6 +100,12 @@ export const getDueDateStatus = (dueDateValue) => {
     due,
     diffDays,
     isOverdue: diffDays < 0,
-    isUrgent: diffDays >= 0 && diffDays <= 3
+    isUrgent: diffDays >= 0 && diffDays <= 3,
+    label: diffDays < 0
+      ? `${Math.abs(diffDays)} gün gecikti`
+      : diffDays === 0 ? 'Bugün'
+      : diffDays === 1 ? 'Yarın'
+      : diffDays <= 6 ? `${diffDays} gün kaldı`
+      : due.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
   };
 };

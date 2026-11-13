@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { 
-  collection, query, onSnapshot, orderBy, 
+  collection, query, onSnapshot, 
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp 
 } from 'firebase/firestore';
 import { parseLocalDate } from '../utils/helpers';
@@ -37,15 +37,15 @@ export const useAllHomework = (userId, courses) => {
 
     courses.forEach(course => {
       const q = query(
-        collection(db, `users/${userId}/courses/${course.id}/homework`),
-        orderBy('dueDate', 'asc')
+        collection(db, `users/${userId}/courses/${course.id}/homework`)
       );
       
       const unsubscribe = onSnapshot(q, 
         (snapshot) => {
           const hwData = snapshot.docs.map(d => ({
             id: d.id,
-            ...d.data()
+            ...d.data(),
+            courseId: course.id
           }));
           
           setHomeworkByCourse(prev => ({

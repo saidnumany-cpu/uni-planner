@@ -1,90 +1,38 @@
 import React from 'react';
 
-class ErrorBoundary extends React.Component {
+/** Beklenmeyen hatalarda uygulamanın tamamen beyaz ekrana düşmesini engeller */
+export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { error: null };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { error };
   }
 
-  componentDidCatch(error, errorInfo) {
-    console.error('UniPlanner ErrorBoundary yakaladı:', error, errorInfo);
+  componentDidCatch(error, info) {
+    console.error('UniPlanner hata yakaladı:', error, info);
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
     window.location.hash = 'schedule';
     window.location.reload();
   };
 
   render() {
-    if (this.state.hasError) {
-      return (
-        <div 
-          className="flex-center animate-fade-in" 
-          style={{ 
-            minHeight: '100dvh', 
-            padding: 'var(--space-md)',
-            backgroundColor: 'var(--bg-primary)',
-            color: 'var(--text-primary)'
-          }}
-        >
-          <div className="bg-orb bg-orb-1" />
-          <div className="bg-orb bg-orb-2" />
-          <div className="bg-orb bg-orb-3" />
-          
-          <div 
-            className="glass glass-card animate-slide-up" 
-            style={{ 
-              width: '100%', 
-              maxWidth: '460px', 
-              textAlign: 'center',
-              padding: 'var(--space-xl)'
-            }}
-          >
-            <div style={{ fontSize: '3.5rem', marginBottom: 'var(--space-md)' }}>
-              ⚠️
-            </div>
-            <h2 style={{ marginBottom: 'var(--space-sm)' }}>
-              Beklenmeyen Bir Hata Oluştu
-            </h2>
-            <p className="text-secondary text-sm" style={{ marginBottom: 'var(--space-lg)' }}>
-              Uygulama çalışırken beklenmeyen bir durum ile karşılaşıldı. Verileriniz güvendedir.
-            </p>
-
-            {this.state.error?.message && (
-              <div 
-                className="glass-surface text-xs" 
-                style={{ 
-                  padding: 'var(--space-sm)', 
-                  marginBottom: 'var(--space-lg)',
-                  color: 'var(--accent-red)',
-                  textAlign: 'left',
-                  wordBreak: 'break-word',
-                  fontFamily: 'monospace'
-                }}
-              >
-                {this.state.error.message}
-              </div>
-            )}
-
-            <button 
-              className="glass-button glass-button-primary" 
-              onClick={this.handleReset}
-              style={{ width: '100%', minHeight: '44px' }}
-            >
-              Uygulamayı Yeniden Başlat
-            </button>
-          </div>
+    if (!this.state.error) return this.props.children;
+    return (
+      <main className="login">
+        <div className="login-card card" role="alert" style={{ textAlign: 'center', alignItems: 'center' }}>
+          <h1 style={{ fontSize: '1.5rem' }}>Bir şeyler ters gitti</h1>
+          <p className="muted">Beklenmeyen bir hata oluştu. Verilerin güvende; uygulamayı yeniden başlatmayı dene.</p>
+          {this.state.error?.message && (
+            <code className="text-xs subtle" style={{ wordBreak: 'break-word' }}>{this.state.error.message}</code>
+          )}
+          <button type="button" className="btn btn-primary btn-block" onClick={this.handleReset}>Yeniden başlat</button>
         </div>
-      );
-    }
-
-    return this.props.children;
+      </main>
+    );
   }
 }
-
-export default ErrorBoundary;

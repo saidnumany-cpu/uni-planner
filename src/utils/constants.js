@@ -1,53 +1,55 @@
-export const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'];
+/** Haftanın günleri (Pazartesi = 0) */
+export const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+export const DAY_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+export const WEEKDAY_COUNT = 5; // Hafta sonu sütunları yalnızca o günlerde ders varsa gösterilir
 
 /**
- * 15 dakikalık aralıklarla saat dilimleri (08:00 - 22:00)
- * Her slot = 15 dakika
+ * 15 dakikalık aralıklarla saat dilimleri (07:00 - 23:00)
  */
 const generateTimeSlots = () => {
   const slots = [];
-  for (let h = 8; h <= 21; h++) {
+  for (let h = 7; h <= 22; h++) {
     for (let m = 0; m < 60; m += 15) {
       slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     }
   }
-  slots.push('22:00');
+  slots.push('23:00');
   return slots;
 };
 
 export const TIME_SLOTS = generateTimeSlots();
 
-/**
- * Bir saat stringinin tam saat olup olmadığını kontrol eder
- * @param {string} time - 'HH:MM' formatında saat
- */
-export const isFullHour = (time) => time.endsWith(':00');
+/** 'HH:MM' → dakika (geçersizse null) */
+export const toMinutes = (time) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(time || '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
 
-/**
- * Verilen startTime'dan 1 saat sonrasını döner
- * @param {string} startTime - Başlangıç saati
- * @returns {string} Bitiş saati
- */
+/** dakika → 'HH:MM' */
+export const fromMinutes = (mins) => {
+  const clamped = Math.max(0, Math.min(mins, 23 * 60 + 59));
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
+};
+
+/** Başlangıç saatinden varsayılan bitiş (1 saat sonrası, en geç 23:00) */
 export const getDefaultEndTime = (startTime) => {
-  const idx = TIME_SLOTS.indexOf(startTime);
-  // 1 saat = 4 slot (15 dk × 4)
-  const endIdx = Math.min(idx + 4, TIME_SLOTS.length - 1);
-  return TIME_SLOTS[endIdx];
+  const start = toMinutes(startTime) ?? 9 * 60;
+  return fromMinutes(Math.min(start + 60, 23 * 60));
 };
 
 export const COURSE_COLORS = [
-  '#7c3aed', // purple
-  '#2563eb', // blue
-  '#0891b2', // cyan
-  '#059669', // emerald
-  '#d97706', // amber
-  '#dc2626', // red
-  '#db2777', // pink
-  '#4f46e5', // indigo
-  '#0d9488', // teal
-  '#ea580c'  // orange
+  { value: '#2563eb', label: 'Mavi' },
+  { value: '#7c3aed', label: 'Mor' },
+  { value: '#0891b2', label: 'Camgöbeği' },
+  { value: '#059669', label: 'Yeşil' },
+  { value: '#d97706', label: 'Amber' },
+  { value: '#dc2626', label: 'Kırmızı' },
+  { value: '#db2777', label: 'Pembe' },
+  { value: '#4f46e5', label: 'İndigo' },
+  { value: '#0d9488', label: 'Deniz yeşili' },
+  { value: '#ea580c', label: 'Turuncu' }
 ];
 
-export const SEMESTER_WEEKS = 14;
-
-export const WEEK_LABELS = Array.from({ length: SEMESTER_WEEKS }, (_, i) => `${i + 1}. Hafta`);
+export const DEFAULT_SEMESTER_WEEKS = 14;
+/** Türk üniversitelerinde yaygın: teorik derslerde %30 devamsızlık hakkı (14 haftada 4) */
+export const DEFAULT_ABSENCE_LIMIT = 4;
