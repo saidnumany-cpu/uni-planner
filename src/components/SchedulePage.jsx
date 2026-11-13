@@ -125,18 +125,16 @@ export default function SchedulePage({ courses, coursesLoading, homework, onCour
   return (
     <div className="page-enter">
       <header className="page-header">
-        <div>
+        <div className="page-title-row">
           <h1>Program</h1>
-          <div className="row" style={{ marginTop: 'var(--s-2)', flexWrap: 'wrap' }}>
-            <span className="muted" style={{ textTransform: 'capitalize' }}>{dateLabel}</span>
-            <WeekBadge onOpenSettings={onOpenSettings} />
-          </div>
-        </div>
-        {wide && (
-          <button type="button" className="btn btn-primary" onClick={onAddCourse}>
+          <button type="button" className={`btn btn-primary${wide ? '' : ' btn-sm'}`} onClick={onAddCourse}>
             <PlusIcon size={18} /> Ders ekle
           </button>
-        )}
+        </div>
+        <div className="row" style={{ flexWrap: 'wrap' }}>
+          <span className="muted" style={{ textTransform: 'capitalize' }}>{dateLabel}</span>
+          <WeekBadge onOpenSettings={onOpenSettings} />
+        </div>
       </header>
 
       {wide && hasCourses && (
@@ -154,11 +152,6 @@ export default function SchedulePage({ courses, coursesLoading, homework, onCour
         </div>
       )}
 
-      {!wide && (
-        <button type="button" className="fab" onClick={onAddCourse} aria-label="Ders ekle">
-          <PlusIcon size={22} /> Ders
-        </button>
-      )}
     </div>
   );
 }

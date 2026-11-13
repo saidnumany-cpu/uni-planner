@@ -256,7 +256,7 @@ img { max-width: 100%; display: block; }
 }
 
 .main {
-  padding: var(--s-5) max(var(--s-4), env(safe-area-inset-right)) calc(var(--bottomnav-h) + env(safe-area-inset-bottom) + var(--s-12) + var(--s-8)) max(var(--s-4), env(safe-area-inset-left));
+  padding: var(--s-5) max(var(--s-4), env(safe-area-inset-right)) calc(var(--bottomnav-h) + env(safe-area-inset-bottom) + var(--s-8)) max(var(--s-4), env(safe-area-inset-left));
   max-width: 1240px;
   margin: 0 auto;
 }
@@ -396,19 +396,23 @@ img { max-width: 100%; display: block; }
   }
 }
 
-/* Sayfa başlığı */
+/* Sayfa başlığı: başlık + ana eylem aynı satırda, altında bilgi satırı */
 .page-header {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--s-4);
+  flex-direction: column;
+  gap: var(--s-2);
   margin-bottom: var(--s-5);
-  flex-wrap: wrap;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
 }
 
 .page-header p {
   color: var(--text-2);
-  margin-top: var(--s-1);
   font-size: 0.9375rem;
 }
 
@@ -1791,7 +1795,7 @@ button.agenda-item:active { background: var(--surface-3); }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-@keyframes page-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
 
 .page-enter { animation: page-in var(--dur) var(--ease-out) both; }
 

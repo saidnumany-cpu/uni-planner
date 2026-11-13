@@ -48,15 +48,15 @@ export default function HomeworkOverview({ courses, coursesLoading, homework, lo
 
   const header = (
     <header className="page-header">
-      <div>
+      <div className="page-title-row">
         <h1>Ödevler</h1>
-        <p>{active.length ? `${active.length} bekleyen ödevin var` : 'Tüm ödevlerin tamam'}</p>
+        {courses.length > 0 && (
+          <button type="button" className={`btn btn-primary${wide ? '' : ' btn-sm'}`} onClick={() => open()}>
+            <PlusIcon size={18} /> Ödev ekle
+          </button>
+        )}
       </div>
-      {wide && courses.length > 0 && (
-        <button type="button" className="btn btn-primary" onClick={() => open()}>
-          <PlusIcon size={18} /> Ödev ekle
-        </button>
-      )}
+      <p>{active.length ? `${active.length} bekleyen ödevin var` : 'Tüm ödevlerin tamam'}</p>
     </header>
   );
 
@@ -157,11 +157,6 @@ export default function HomeworkOverview({ courses, coursesLoading, homework, lo
         ))
       )}
 
-      {!wide && (
-        <button type="button" className="fab" onClick={() => open()} aria-label="Ödev ekle">
-          <PlusIcon size={22} /> Ödev
-        </button>
-      )}
 
       <HomeworkModal
         isOpen={modal.open}
