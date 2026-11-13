@@ -4,6 +4,7 @@ import { SettingsProvider, useSettings } from './contexts/SettingsContext'
 import { useCourses } from './hooks/useCourses'
 import { useAllHomework } from './hooks/useAllHomework'
 import { useAllAttendance } from './hooks/useAllAttendance'
+import { useExams } from './hooks/useExams'
 import LoginScreen from './components/LoginScreen'
 import AppShell from './components/AppShell'
 import SchedulePage from './components/SchedulePage'
@@ -11,6 +12,8 @@ import CourseDetail from './components/CourseDetail'
 import CourseModal from './components/CourseModal'
 import HomeworkOverview from './components/HomeworkOverview'
 import StatsOverview from './components/StatsOverview'
+import ExamsPage from './components/ExamsPage'
+import ArchivePage from './components/ArchivePage'
 import SettingsModal from './components/SettingsModal'
 import Toast from './components/Toast'
 import { runInBackground, notify } from './utils/toast'
@@ -18,10 +21,10 @@ import { getDueDateStatus } from './utils/helpers'
 import { pickNextColor } from './utils/course'
 import { AlertCircleIcon } from './icons/SVGIcons'
 
-const TABS = ['schedule', 'homework', 'stats']
+const TABS = ['schedule', 'exams', 'homework', 'stats', 'archive']
 const COURSE_TABS = ['notes', 'homework', 'attendance']
 
-/* Hash yönlendirme: #schedule | #homework | #stats | #course/{id}[/{sekme}] */
+/* Hash yönlendirme: #schedule | #exams | #homework | #stats | #archive | #course/{id}[/{sekme}] */
 function parseHash(hash) {
   const h = hash.replace(/^#/, '')
   if (h.startsWith('course/')) {
@@ -57,16 +60,29 @@ function PermissionBanner({ error }) {
 
 /** Giriş yapılmış kullanıcının uygulaması */
 function PlannerApp({ user }) {
-  const { weeks } = useSettings()
-  const { courses, loading: coursesLoading, error: coursesError, addCourse, updateCourse, deleteCourse } = useCourses(user.uid)
-  const hw = useAllHomework(user.uid, courses)
-  const att = useAllAttendance(user.uid, courses, weeks)
+  const { weeks, semesterStart, periods, updateSettings } = useSettings()
+  const {
+    courses: allCourses, loading: coursesLoading, error: coursesError,
+    addCourse, updateCourse, deleteCourse, archiveCourses, unarchiveCourse
+  } = useCourses(user.uid)
+  const courses = useMemo(() => allCourses.filter(c => !c.archived), [allCourses])
+  const archivedCourses = useMemo(() => allCourses.filter(c => c.archived), [allCourses])
+  const examsData = useExams(user.uid)
 
   const [route, setRoute] = useState(() => parseHash(window.location.hash))
   const [courseModal, setCourseModal] = useState({ open: false, course: null })
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  const selectedCourse = route.courseId ? courses.find(c => c.id === route.courseId) || null : null
+  const selectedCourse = route.courseId ? allCourses.find(c => c.id === route.courseId) || null : null
+
+  // Ödev/yoklama dinleyicileri: aktif dersler + açık olan arşiv dersi
+  const trackedCourses = useMemo(
+    () => (selectedCourse?.archived ? [...courses, selectedCourse] : courses),
+    [courses, selectedCourse]
+  )
+  const weeksFor = useCallback((c) => (c.archived ? Number(c.termWeeks) || weeks : weeks), [weeks])
+  const hw = useAllHomework(user.uid, trackedCourses)
+  const att = useAllAttendance(user.uid, trackedCourses, weeksFor)
 
   // Tarayıcı geri/ileri tuşları ve elle değiştirilen adres
   useEffect(() => {
@@ -135,15 +151,50 @@ function PlannerApp({ user }) {
     }
   }), [hw])
 
-  const setAttendance = useCallback((courseId, week, attended, note) => {
-    runInBackground(att.toggleAttendance(courseId, week, attended, note), 'Yoklama kaydedilemedi')
+  const setAttendance = useCallback((courseId, week, status, note) => {
+    runInBackground(att.setAttendance(courseId, week, status, note), 'Yoklama kaydedilemedi')
   }, [att])
+
+  /* ---- Sınav işlemleri ---- */
+  const examActions = useMemo(() => ({
+    add: (data) => runInBackground(examsData.addExam(data), 'Sınav eklenemedi'),
+    update: (exam, data) => runInBackground(examsData.updateExam(exam.id, data), 'Sınav güncellenemedi'),
+    remove: (exam) => {
+      runInBackground(examsData.deleteExam(exam.id), 'Sınav silinemedi')
+      notify('Sınav silindi', 'success')
+    }
+  }), [examsData])
+
+  /* ---- Arşiv ---- */
+  const archiveTerm = (term) => {
+    const ids = courses.map(c => c.id)
+    if (!ids.length) return
+    runInBackground(
+      archiveCourses(ids, { term, termStart: semesterStart, termWeeks: weeks, termPeriods: periods })
+        .then(() => updateSettings({ semesterStart: '' })),
+      'Dönem arşivlenemedi'
+    )
+    notify(`${ids.length} ders "${term}" olarak arşivlendi. Yeni dönemin başlangıcını Ayarlar'dan girebilirsin.`, 'success')
+    navigate('schedule')
+  }
+
+  const restoreCourse = (course) => {
+    runInBackground(unarchiveCourse(course.id), 'Ders arşivden çıkarılamadı')
+    notify(`${course.name} tekrar aktif derslerde`, 'success')
+  }
 
   // Menüde gösterilecek acil ödev sayısı (gecikmiş + 1 gün içinde)
   const urgentCount = hw.allHomework.filter(h => {
     if (h.isCompleted || !courses.some(c => c.id === h.courseId)) return false
     const s = getDueDateStatus(h.dueDate)
     return s && s.diffDays <= 1
+  }).length
+
+  // Menüde: 3 gün içindeki sınav sayısı
+  const soonExamCount = examsData.exams.filter(e => {
+    if (!courses.some(c => c.id === e.courseId)) return false
+    const s = getDueDateStatus(e.date)
+    return s && s.diffDays >= 0 && s.diffDays <= 3
   }).length
 
   let page
@@ -160,9 +211,30 @@ function PlannerApp({ user }) {
         onSetAttendance={setAttendance}
         homeworkActions={homeworkActions}
         onBack={() => navigate(origin)}
-        backLabel={{ schedule: 'Program', homework: 'Ödevler', stats: 'Özet' }[origin]}
+        backLabel={{ schedule: 'Program', exams: 'Sınavlar', homework: 'Ödevler', stats: 'Özet', archive: 'Geçmiş dönemler' }[origin]}
         onEdit={openEditCourse}
+        onUnarchive={restoreCourse}
         initialTab={route.courseTab}
+      />
+    )
+  } else if (route.tab === 'exams') {
+    page = (
+      <ExamsPage
+        courses={courses}
+        coursesLoading={coursesLoading}
+        exams={examsData.exams}
+        loading={examsData.loading}
+        actions={examActions}
+        onAddCourse={openNewCourse}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+    )
+  } else if (route.tab === 'archive') {
+    page = (
+      <ArchivePage
+        courses={archivedCourses}
+        onOpenCourse={(c) => openCourse(c)}
+        onBack={() => navigate('stats')}
       />
     )
   } else if (route.tab === 'homework') {
@@ -186,6 +258,8 @@ function PlannerApp({ user }) {
         loading={hw.loading || att.loading}
         onOpenCourse={(c) => openCourse(c, 'attendance')}
         onAddCourse={openNewCourse}
+        archivedCount={archivedCourses.length}
+        onOpenArchive={() => navigate('archive')}
       />
     )
   } else {
@@ -194,10 +268,12 @@ function PlannerApp({ user }) {
         courses={courses}
         coursesLoading={coursesLoading}
         homework={hw.allHomework}
+        exams={examsData.exams}
         onCourseClick={(c) => openCourse(c)}
         onOpenCourse={openCourse}
         onAddCourse={openNewCourse}
         onOpenHomework={() => navigate('homework')}
+        onOpenExams={() => navigate('exams')}
         onOpenSettings={() => setSettingsOpen(true)}
       />
     )
@@ -206,10 +282,10 @@ function PlannerApp({ user }) {
   return (
     <>
       <AppShell
-        activeTab={route.courseId ? origin : route.tab}
+        activeTab={(() => { const t = route.courseId ? origin : route.tab; return t === 'archive' ? 'stats' : t })()}
         onTabChange={(tab) => navigate(tab)}
         onOpenSettings={() => setSettingsOpen(true)}
-        badges={{ homework: urgentCount || null }}
+        badges={{ homework: urgentCount || null, exams: soonExamCount || null }}
       >
         {coursesError && <PermissionBanner error={coursesError} />}
         {page}
@@ -223,7 +299,12 @@ function PlannerApp({ user }) {
         onDelete={removeCourse}
         defaultColor={pickNextColor(courses)}
       />
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        activeCourseCount={courses.length}
+        onArchiveTerm={archiveTerm}
+      />
     </>
   )
 }

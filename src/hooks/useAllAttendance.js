@@ -4,12 +4,13 @@ import {
   collection, doc, setDoc, onSnapshot, serverTimestamp, query 
 } from 'firebase/firestore';
 import { DEFAULT_SEMESTER_WEEKS } from '../utils/constants';
+import { attendanceStatus } from '../utils/attendance';
 
 /**
  * Tüm derslerin yoklama işlemlerini tek bir hook ile yönetir
  * @param {string} userId - Kullanıcı ID'si
  * @param {Array} courses - Kullanıcının dersleri
- * @param {number} totalWeeks - Toplam hafta sayısı
+ * @param {number|Function} totalWeeks - Toplam hafta sayısı (ya da course => hafta sayısı)
  */
 export const useAllAttendance = (userId, courses, totalWeeks = DEFAULT_SEMESTER_WEEKS) => {
   const [attendanceDataByCourse, setAttendanceDataByCourse] = useState({});
@@ -73,14 +74,19 @@ export const useAllAttendance = (userId, courses, totalWeeks = DEFAULT_SEMESTER_
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, courseIds]); // courseIds is a stable string -- avoids infinite re-render
 
-  const toggleAttendance = async (courseId, weekNumber, attended, note = '') => {
+  /**
+   * @param {'attended'|'missed'|'cancelled'|'noTeacher'|null} status
+   */
+  const setAttendance = async (courseId, weekNumber, status, note = '') => {
     if (!userId || !courseId) throw new Error('Kullanıcı girişi ve ders seçimi gerekli');
     
     const attRef = doc(db, `users/${userId}/courses/${courseId}/attendance`, String(weekNumber));
     
     await setDoc(attRef, {
       week: Number(weekNumber),
-      attended,
+      status: status || null,
+      // Eski kayıtlarla uyum: attended alanı yalnızca katıldım/gelmedim için dolu
+      attended: status === 'attended' ? true : status === 'missed' ? false : null,
       note,
       updatedAt: serverTimestamp()
     }, { merge: true });
@@ -90,29 +96,34 @@ export const useAllAttendance = (userId, courses, totalWeeks = DEFAULT_SEMESTER_
     const result = {};
     for (const course of courses) {
       const courseId = course.id;
+      const weeks = typeof totalWeeks === 'function' ? totalWeeks(course) : totalWeeks;
       // Dönem hafta sayısı azaltıldıysa aralık dışındaki eski kayıtları sayma
-      const records = (attendanceDataByCourse[courseId] || []).filter(r => Number(r.week) >= 1 && Number(r.week) <= totalWeeks);
+      const records = (attendanceDataByCourse[courseId] || []).filter(r => Number(r.week) >= 1 && Number(r.week) <= weeks);
+      const count = (st) => records.filter(r => attendanceStatus(r) === st).length;
       
-      const attendedWeeks = records.filter(record => record.attended === true).length;
-      const missedWeeks = records.filter(record => record.attended === false).length;
+      const attendedWeeks = count('attended');
+      const missedWeeks = count('missed');
+      const cancelledWeeks = count('cancelled') + count('noTeacher');
       const recordedWeeks = attendedWeeks + missedWeeks;
+      // Ders yapılmayan haftalar orana ve devamsızlığa katılmaz
       const percentage = recordedWeeks > 0 ? Math.round((attendedWeeks / recordedWeeks) * 100) : 0;
       
       result[courseId] = {
         records,
         stats: {
-          total: totalWeeks,
+          total: weeks,
           attended: attendedWeeks,
           missed: missedWeeks,
+          cancelled: cancelledWeeks,
           percentage
         }
       };
     }
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attendanceDataByCourse, courseIds, totalWeeks]);
+  }, [attendanceDataByCourse, courses, totalWeeks]);
 
-  return { attendanceByCourse, loading, error, toggleAttendance };
+  return { attendanceByCourse, loading, error, setAttendance };
 };
 
 export default useAllAttendance;

@@ -1,9 +1,10 @@
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from './Avatar';
-import { CalendarIcon, ClipboardIcon, ChartIcon, SettingsIcon, GraduationCapIcon } from '../icons/SVGIcons';
+import { CalendarIcon, ClipboardIcon, ChartIcon, SettingsIcon, GraduationCapIcon, ExamIcon } from '../icons/SVGIcons';
 
 export const NAV_ITEMS = [
   { id: 'schedule', label: 'Program', icon: CalendarIcon },
+  { id: 'exams', label: 'Sınavlar', icon: ExamIcon },
   { id: 'homework', label: 'Ödevler', icon: ClipboardIcon },
   { id: 'stats', label: 'Özet', icon: ChartIcon }
 ];

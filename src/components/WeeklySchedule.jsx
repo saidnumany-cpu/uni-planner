@@ -4,7 +4,10 @@ import { flattenSessions, todayIndex } from '../utils/course';
 import useMediaQuery from '../hooks/useMediaQuery';
 import useNow from '../hooks/useNow';
 import EmptyState from './EmptyState';
-import { CalendarIcon, MapPinIcon, PlusIcon } from '../icons/SVGIcons';
+import { periodsOn, periodKind, periodLabel, formatRange, periodsBetween } from '../utils/academic';
+import { examKind, byExamDate } from '../utils/exams';
+import { toDateInputValue, parseLocalDate } from '../utils/helpers';
+import { CalendarIcon, MapPinIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, GraduationCapIcon } from '../icons/SVGIcons';
 
 const HOUR_H = 64; // px / saat
 
@@ -19,6 +22,35 @@ const weekDates = (now) => {
     return d;
   });
 };
+
+/** Bir günün takvim dönemleri ve sınavları */
+const dayInfo = (date, periods, examsByDate) => {
+  const inPeriods = periodsOn(periods, date);
+  const off = inPeriods.find(p => periodKind(p).noClasses) || null;
+  return { periods: inPeriods, off, exams: examsByDate[toDateInputValue(date)] || [] };
+};
+
+/** Gün başlığı altındaki dönem etiketi + sınav çipleri */
+function DayExtras({ info, courseById, onOpenExams }) {
+  if (!info.periods.length && !info.exams.length) return null;
+  return (
+    <span className="day-extras">
+      {info.periods.map(p => {
+        const kind = periodKind(p);
+        return <span key={p.id || p.start} className={`badge ${kind.tone ? `badge-${kind.tone}` : ''}`} title={periodLabel(p)}>{kind.short}</span>;
+      })}
+      {info.exams.map(e => {
+        const c = courseById[e.courseId];
+        return (
+          <button key={e.id} type="button" className="exam-chip" style={{ '--c': c?.color || 'var(--primary)' }} onClick={onOpenExams} title={`${c?.name || ''} · ${examKind(e.kind).label}`}>
+            <span className="truncate">{c?.name || 'Sınav'}</span>
+            <small>{examKind(e.kind).label}{e.startTime ? ` · ${e.startTime}` : ''}</small>
+          </button>
+        );
+      })}
+    </span>
+  );
+}
 
 /** Aynı gün çakışan oturumları yan yana şeritlere yerleştirir */
 const layoutLanes = (sessions) => {
@@ -47,9 +79,8 @@ const layoutLanes = (sessions) => {
 /* ------------------------------------------------------------------ */
 /* Haftalık ızgara (tablet / masaüstü)                                */
 /* ------------------------------------------------------------------ */
-function WeekGrid({ sessions, onCourseClick, now }) {
-  const tIdx = todayIndex(now);
-  const dates = weekDates(now);
+function WeekGrid({ sessions, onCourseClick, now, dates, isThisWeek, infos, courseById, onOpenExams }) {
+  const tIdx = isThisWeek ? todayIndex(now) : -1;
   const hasWeekend = sessions.some(s => s.dayIndex >= WEEKDAY_COUNT);
   const dayCount = hasWeekend ? 7 : WEEKDAY_COUNT;
 
@@ -81,6 +112,7 @@ function WeekGrid({ sessions, onCourseClick, now }) {
             <div key={day} className={`week-head-cell${i === tIdx ? ' is-today' : ''}`}>
               <strong>{DAY_SHORT[i]}</strong>
               {dates[i].getDate()} {dates[i].toLocaleDateString('tr-TR', { month: 'short' })}
+              <DayExtras info={infos[i]} courseById={courseById} onOpenExams={onOpenExams} />
             </div>
           ))}
 
@@ -93,7 +125,8 @@ function WeekGrid({ sessions, onCourseClick, now }) {
           </div>
 
           {DAYS.slice(0, dayCount).map((day, d) => (
-            <div key={day} className={`week-day${d === tIdx ? ' is-today' : ''}`} style={{ height }}>
+            <div key={day} className={`week-day${d === tIdx ? ' is-today' : ''}${infos[d].off ? ' is-off' : ''}`} style={{ height }}>
+              {infos[d].off && <span className="week-day-off" aria-hidden="true">{periodLabel(infos[d].off)}</span>}
               {sessions.filter(s => s.dayIndex === d).map(s => {
                 const lane = lanes[s.key] || { lane: 0, lanes: 1 };
                 const h = Math.max(top(s.end) - top(s.start) - 2, 28);
@@ -170,13 +203,13 @@ export function AgendaList({ sessions, onCourseClick, now, isToday }) {
   );
 }
 
-function DayAgenda({ sessions, onCourseClick, now }) {
-  const tIdx = todayIndex(now);
-  const dates = weekDates(now);
+function DayAgenda({ sessions, onCourseClick, now, dates, isThisWeek, infos, courseById, onOpenExams }) {
+  const tIdx = isThisWeek ? todayIndex(now) : -1;
   const hasWeekend = sessions.some(s => s.dayIndex >= WEEKDAY_COUNT);
   const dayCount = hasWeekend || tIdx >= WEEKDAY_COUNT ? 7 : WEEKDAY_COUNT;
   // Hafta sonu ve o gün ders yoksa Pazartesi'den başla
-  const [selected, setSelected] = useState(() => (tIdx < dayCount ? tIdx : 0));
+  const [selected, setSelected] = useState(() => (tIdx >= 0 && tIdx < dayCount ? tIdx : 0));
+  const info = infos[selected];
   const daySessions = sessions.filter(s => s.dayIndex === selected).sort((a, b) => a.start - b.start);
 
   return (
@@ -196,15 +229,46 @@ function DayAgenda({ sessions, onCourseClick, now }) {
             >
               {DAY_SHORT[i]}
               <strong>{dates[i].getDate()}</strong>
-              {count > 0 && <span className="dot" aria-hidden="true" />}
+              {count > 0 && !infos[i].off && <span className="dot" aria-hidden="true" />}
+              {(infos[i].exams.length > 0 || infos[i].off) && (
+                <span className={`day-flag${infos[i].exams.length ? ' has-exam' : ''}`} aria-hidden="true" />
+              )}
             </button>
           );
         })}
       </div>
 
       <div role="tabpanel" aria-label={DAYS[selected]}>
+        {info.off && (
+          <div className={`alert alert-${periodKind(info.off).tone === 'danger' ? 'danger' : 'warning'}`} style={{ marginBottom: 'var(--s-3)' }}>
+            <GraduationCapIcon size={18} />
+            <span><strong>{periodLabel(info.off)}</strong>{formatRange(info.off.start, info.off.end)} · bu günlerde normal ders yapılmaz</span>
+          </div>
+        )}
+        {info.exams.length > 0 && (
+          <div className="hw-list" style={{ marginBottom: 'var(--s-3)' }}>
+            {info.exams.map(e => {
+              const c = courseById[e.courseId];
+              return (
+                <button key={e.id} type="button" className="exam-item" style={{ '--c': c?.color || 'var(--primary)' }} onClick={onOpenExams}>
+                  <span className="exam-body">
+                    <span className="row" style={{ gap: 'var(--s-2)' }}>
+                      <span className={`badge badge-${examKind(e.kind).tone || 'primary'}`}>{examKind(e.kind).label}</span>
+                      <span className="exam-title">{c?.name}</span>
+                    </span>
+                    {(e.startTime || e.location) && (
+                      <span className="meta">{e.startTime}{e.startTime && e.location ? ' · ' : ''}{e.location}</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {daySessions.length ? (
-          <AgendaList sessions={daySessions} onCourseClick={onCourseClick} now={now} isToday={selected === tIdx} />
+          <div className={info.off ? 'is-dimmed' : undefined}>
+            <AgendaList sessions={daySessions} onCourseClick={onCourseClick} now={now} isToday={selected === tIdx && !info.off} />
+          </div>
         ) : (
           <div className="card">
             <EmptyState compact icon={<CalendarIcon size={24} />} title={`${DAYS[selected]} günü ders yok`} description="Boş bir gün — ödevlere ya da notlara göz atabilirsin." />
@@ -218,10 +282,34 @@ function DayAgenda({ sessions, onCourseClick, now }) {
 /**
  * Program görünümü: telefonda günlük ajanda, geniş ekranda haftalık ızgara
  */
-export default function WeeklySchedule({ courses, loading, onCourseClick, onAddCourse }) {
+export default function WeeklySchedule({ courses, loading, onCourseClick, onAddCourse, exams = [], periods = [], onOpenExams }) {
   const wide = useMediaQuery('(min-width: 768px)');
   const now = useNow();
+  const [offset, setOffset] = useState(0);
   const sessions = useMemo(() => flattenSessions(courses).filter(s => s.dayIndex !== -1), [courses]);
+  const courseById = useMemo(() => Object.fromEntries(courses.map(c => [c.id, c])), [courses]);
+
+  const ref = new Date(now);
+  ref.setDate(ref.getDate() + offset * 7);
+  const dates = weekDates(ref);
+  const isThisWeek = offset === 0;
+
+  const examsByDate = useMemo(() => {
+    const map = {};
+    exams.filter(e => e.date && courseById[e.courseId]).sort(byExamDate).forEach(e => { (map[e.date] ||= []).push(e); });
+    return map;
+  }, [exams, courseById]);
+  const infos = dates.map(d => dayInfo(d, periods, examsByDate));
+  const weekPeriods = periodsBetween(periods, dates[0], dates[6]);
+
+  // Sıradaki sınav dönemine atla
+  const nextPeriod = periods.find(p => p.start > toDateInputValue(dates[6]) && periodKind(p).noClasses);
+  const jumpTo = (p) => {
+    const target = parseLocalDate(p.start);
+    const thisMonday = weekDates(now)[0];
+    const diff = Math.round((weekDates(target)[0] - thisMonday) / (7 * 24 * 60 * 60 * 1000));
+    setOffset(diff);
+  };
 
   if (loading) {
     return <div className="skeleton" style={{ height: wide ? 480 : 300 }} aria-label="Yükleniyor" />;
@@ -240,8 +328,32 @@ export default function WeeklySchedule({ courses, loading, onCourseClick, onAddC
     );
   }
 
-  return wide
-    ? <WeekGrid sessions={sessions} onCourseClick={onCourseClick} now={now} />
-    : <DayAgenda sessions={sessions} onCourseClick={onCourseClick} now={now} />;
+  const shared = { sessions, onCourseClick, now, dates, isThisWeek, infos, courseById, onOpenExams };
+
+  return (
+    <div>
+      <div className="week-nav">
+        <button type="button" className="btn btn-sm btn-icon" onClick={() => setOffset(o => o - 1)} aria-label="Önceki hafta"><ChevronLeftIcon size={18} /></button>
+        <span className="week-nav-label">
+          <strong className="tabular">{formatRange(toDateInputValue(dates[0]), toDateInputValue(dates[6]))}</strong>
+          {weekPeriods.map(p => {
+            const kind = periodKind(p);
+            return <span key={p.id || p.start} className={`badge ${kind.tone ? `badge-${kind.tone}` : ''}`}>{periodLabel(p)}</span>;
+          })}
+        </span>
+        <button type="button" className="btn btn-sm btn-icon" onClick={() => setOffset(o => o + 1)} aria-label="Sonraki hafta"><ChevronRightIcon size={18} /></button>
+        <span className="spacer" />
+        {!isThisWeek && <button type="button" className="btn btn-sm" onClick={() => setOffset(0)}>Bu hafta</button>}
+        {nextPeriod && (
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => jumpTo(nextPeriod)}>
+            {periodKind(nextPeriod).short} haftasına git <ChevronRightIcon size={16} />
+          </button>
+        )}
+      </div>
+      {wide
+        ? <WeekGrid {...shared} />
+        : <DayAgenda key={offset} {...shared} />}
+    </div>
+  );
 }
 

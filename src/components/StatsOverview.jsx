@@ -2,14 +2,15 @@ import EmptyState from './EmptyState';
 import { absenceSummary } from './AttendanceTracker';
 import { getAbsenceLimit, formatSessions } from '../utils/course';
 import { useSettings } from '../contexts/SettingsContext';
-import { ChartIcon, ChevronRightIcon, PlusIcon } from '../icons/SVGIcons';
+import { ChartIcon, ChevronRightIcon, PlusIcon, InboxIcon } from '../icons/SVGIcons';
 
 const rateTone = (pct, recorded) => !recorded ? '' : pct >= 70 ? 'success' : pct >= 50 ? 'warning' : 'danger';
 
 /** Tek ders özeti */
 function CourseStatCard({ course, attendance, homework, weeks, onOpen }) {
-  const stats = attendance?.stats || { attended: 0, missed: 0, percentage: 0 };
+  const stats = attendance?.stats || { attended: 0, missed: 0, cancelled: 0, percentage: 0 };
   const recorded = stats.attended + stats.missed;
+  const entered = recorded + (stats.cancelled || 0);
   const limit = getAbsenceLimit(course);
   const summary = absenceSummary(stats.missed, limit);
   const doneHw = homework.filter(h => h.isCompleted).length;
@@ -32,7 +33,7 @@ function CourseStatCard({ course, attendance, homework, weeks, onOpen }) {
 
       <div className="stack-sm">
         <div className="row-between text-sm">
-          <span className="muted">Devam ({recorded}/{weeks} hafta girildi)</span>
+          <span className="muted">Devam ({entered}/{weeks} hafta girildi)</span>
           <strong className={`tabular ${rateTone(stats.percentage, recorded) ? `stat-value ${rateTone(stats.percentage, recorded)}` : ''}`} style={{ fontSize: '0.9375rem' }}>
             {recorded ? `%${stats.percentage}` : '—'}
           </strong>
@@ -40,6 +41,7 @@ function CourseStatCard({ course, attendance, homework, weeks, onOpen }) {
         <div className="progress" aria-hidden="true">
           <span style={{ width: `${(stats.attended / weeks) * 100}%`, background: 'var(--success-solid)' }} />
           <span style={{ width: `${(stats.missed / weeks) * 100}%`, background: 'var(--danger-solid)' }} />
+          <span style={{ width: `${((stats.cancelled || 0) / weeks) * 100}%`, background: 'var(--text-3)' }} />
         </div>
         <dl className="kv" style={{ marginTop: 'var(--s-2)' }}>
           <dt>Devamsızlık</dt>
@@ -48,6 +50,7 @@ function CourseStatCard({ course, attendance, homework, weeks, onOpen }) {
               {stats.missed}{limit > 0 ? ` / ${limit}` : ''}
             </span>
           </dd>
+          {stats.cancelled > 0 && (<><dt>Ders yapılmadı</dt><dd>{stats.cancelled} hafta</dd></>)}
           <dt>Ödevler</dt>
           <dd>{homework.length ? `${doneHw}/${homework.length} tamamlandı` : '—'}</dd>
         </dl>
@@ -57,7 +60,7 @@ function CourseStatCard({ course, attendance, homework, weeks, onOpen }) {
 }
 
 /** Özet sayfası */
-export default function StatsOverview({ courses, coursesLoading, homework, attendanceByCourse, loading, onOpenCourse, onAddCourse }) {
+export default function StatsOverview({ courses, coursesLoading, homework, attendanceByCourse, loading, onOpenCourse, onAddCourse, archivedCount = 0, onOpenArchive }) {
   const { weeks } = useSettings();
 
   if (coursesLoading) {
@@ -67,7 +70,16 @@ export default function StatsOverview({ courses, coursesLoading, homework, atten
   if (courses.length === 0) {
     return (
       <div className="page-enter">
-        <header className="page-header"><h1>Özet</h1></header>
+        <header className="page-header">
+          <div className="page-title-row">
+            <h1>Özet</h1>
+            {archivedCount > 0 && (
+              <button type="button" className="btn btn-sm" onClick={onOpenArchive}>
+                <InboxIcon size={16} /> Geçmiş dönemler
+              </button>
+            )}
+          </div>
+        </header>
         <div className="card">
           <EmptyState
             icon={<ChartIcon size={26} />}
@@ -97,10 +109,15 @@ export default function StatsOverview({ courses, coursesLoading, homework, atten
   return (
     <div className="page-enter">
       <header className="page-header">
-        <div>
+        <div className="page-title-row">
           <h1>Özet</h1>
-          <p>Dönem genelinde devam ve ödev durumun</p>
+          {archivedCount > 0 && (
+            <button type="button" className="btn btn-sm" onClick={onOpenArchive}>
+              <InboxIcon size={16} /> Geçmiş dönemler
+            </button>
+          )}
         </div>
+        <p>Dönem genelinde devam ve ödev durumun</p>
       </header>
 
       <div className="stat-grid" style={{ marginBottom: 'var(--s-6)' }}>

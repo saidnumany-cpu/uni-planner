@@ -1852,3 +1852,212 @@ button.card:active { background: var(--surface-2); }
   place-items: center;
   border: 2px solid var(--surface);
 }
+
+/* ==========================================================================
+   Sınavlar, akademik takvim, yoklama durumları, arşiv
+   ========================================================================== */
+.spacer { flex: 1; }
+.btn-icon { padding-left: 0; padding-right: 0; width: 36px; justify-content: center; }
+.btn-sm.btn-icon { width: 32px; }
+
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* Dönem kartları */
+.period-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--s-3);
+}
+.period-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+  max-width: 100%;
+}
+.period-card strong { max-width: 100%; }
+.period-card.is-now { border-color: transparent; box-shadow: inset 0 0 0 2px var(--warning); background: var(--warning-soft); }
+.period-card.is-now[data-tone='danger'] { box-shadow: inset 0 0 0 2px var(--danger); background: var(--danger-soft); }
+
+/* Ayarlar: dönem listesi */
+.period-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: var(--s-2);
+  overflow: hidden;
+}
+.period-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+  min-width: 0;
+}
+.period-row:last-child { border-bottom: 0; }
+
+/* Sınav satırı */
+.exam-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  width: 100%;
+  padding: var(--s-3) var(--s-4);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  text-align: left;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.exam-item:last-child { border-bottom: 0; }
+.exam-item:hover { background: var(--surface-2); }
+.exam-date {
+  flex-shrink: 0;
+  width: 52px;
+  padding: 6px 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--c) 14%, var(--surface));
+  border-left: 3px solid var(--c);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+.exam-date strong { font-family: var(--font-heading); font-size: 1.25rem; }
+.exam-date small { font-size: 0.6875rem; color: var(--text-2); text-transform: capitalize; }
+.exam-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.exam-title { font-weight: 600; overflow-wrap: anywhere; }
+
+/* Program: hafta gezinme */
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-3);
+}
+.week-nav-label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.day-extras {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  margin-top: 6px;
+}
+.day-extras .badge { align-self: center; }
+.exam-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px dashed var(--c);
+  border-radius: var(--radius-xs, 6px);
+  background: color-mix(in srgb, var(--c) 10%, var(--surface));
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  line-height: 1.25;
+}
+.exam-chip span { max-width: 100%; }
+.exam-chip small { font-weight: 500; color: var(--text-2); }
+
+.week-day.is-off {
+  background-image:
+    repeating-linear-gradient(135deg, color-mix(in srgb, var(--text-3) 10%, transparent) 0 8px, transparent 8px 16px),
+    repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent var(--hour-h));
+}
+.week-day.is-off .session { opacity: 0.35; }
+.week-day-off {
+  position: absolute;
+  top: 8px;
+  left: 6px;
+  right: 6px;
+  z-index: 1;
+  text-align: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-2);
+  pointer-events: none;
+}
+.is-dimmed { opacity: 0.45; }
+
+.day-flag {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+.day-flag.has-exam { background: var(--danger-solid); }
+
+/* Yoklama: ek durumlar */
+.att-cell.cancelled,
+.att-cell.noTeacher {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--text-2);
+}
+.att-cell.cancelled .state,
+.att-cell.noTeacher .state { background: var(--text-3); border: 0; color: #fff; }
+.att-cell .att-date { font-size: 0.6875rem; color: var(--text-3); }
+.att-cell.attended .att-date,
+.att-cell.missed .att-date { color: currentColor; opacity: 0.75; }
+.att-cell .att-tag { font-size: 0.6875rem; font-weight: 600; }
+
+.att-options { display: grid; gap: var(--s-2); }
+.att-option {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-align: left;
+}
+.att-option strong { display: block; font-size: 0.9375rem; }
+.att-option small { color: var(--text-2); font-size: 0.8125rem; }
+.att-option .state {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+  background: var(--text-3);
+}
+.att-option.attended .state { background: var(--success-solid); }
+.att-option.missed .state { background: var(--danger-solid); }
+.att-option[aria-checked='true'] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); background: var(--primary-soft); }

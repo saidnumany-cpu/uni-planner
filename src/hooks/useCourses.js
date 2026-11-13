@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import {
   collection, query, onSnapshot, addDoc,
-  updateDoc, doc, serverTimestamp, getDocs, writeBatch
+  updateDoc, doc, serverTimestamp, getDocs, writeBatch, where
 } from 'firebase/firestore';
 
 // Bir derse ait alt koleksiyonlar — ders silinirken bunlar da silinmeli,
@@ -75,6 +75,9 @@ export const useCourses = (userId) => {
       COURSE_SUBCOLLECTIONS.map(name => getDocs(collection(db, `${coursePath}/${name}`)))
     );
     const refs = snapshots.flatMap(snap => snap.docs.map(d => d.ref));
+    // Derse bağlı sınavlar (üst düzey koleksiyonda)
+    const examSnap = await getDocs(query(collection(db, `users/${userId}/exams`), where('courseId', '==', courseId)));
+    examSnap.docs.forEach(d => refs.push(d.ref));
     refs.push(doc(db, coursePath));
 
     // writeBatch en fazla 500 işlem alır — parçalara böl
@@ -85,7 +88,28 @@ export const useCourses = (userId) => {
     }
   };
 
-  return { courses, loading, error, addCourse, updateCourse, deleteCourse };
+  /** Verilen dersleri tek seferde arşive taşır */
+  const archiveCourses = async (courseIds, termInfo) => {
+    if (!userId) throw new Error('Kullanıcı girişi gerekli');
+    for (let i = 0; i < courseIds.length; i += 450) {
+      const batch = writeBatch(db);
+      courseIds.slice(i, i + 450).forEach(id => batch.update(doc(db, `users/${userId}/courses/${id}`), {
+        archived: true,
+        term: termInfo.term,
+        termStart: termInfo.termStart || '',
+        termWeeks: termInfo.termWeeks,
+        termPeriods: termInfo.termPeriods || [],
+        archivedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }));
+      await batch.commit();
+    }
+  };
+
+  const unarchiveCourse = (courseId) =>
+    updateCourse(courseId, { archived: false });
+
+  return { courses, loading, error, addCourse, updateCourse, deleteCourse, archiveCourses, unarchiveCourse };
 };
 
 export default useCourses;

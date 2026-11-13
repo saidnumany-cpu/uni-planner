@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback } 
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { DEFAULT_SEMESTER_WEEKS } from '../utils/constants';
-import { getCurrentWeek } from '../utils/helpers';
+import { normalizePeriods, currentTeachingWeek, teachingWeeks } from '../utils/academic';
 
 const SettingsContext = createContext(null);
 const THEME_KEY = 'uniplanner-theme';
@@ -59,10 +59,14 @@ export function SettingsProvider({ userId, children }) {
   const value = useMemo(() => {
     const weeks = Number(settings.weeks) > 0 ? Number(settings.weeks) : DEFAULT_SEMESTER_WEEKS;
     const semesterStart = settings.semesterStart || '';
+    const periods = normalizePeriods(settings.academicCalendar);
     return {
       weeks,
       semesterStart,
-      currentWeek: semesterStart ? getCurrentWeek(semesterStart, weeks) : null,
+      periods,
+      calendarName: settings.calendarName || '',
+      weekList: semesterStart ? teachingWeeks(semesterStart, weeks, periods) : [],
+      currentWeek: semesterStart ? currentTeachingWeek(semesterStart, weeks, periods) : null,
       updateSettings,
       theme,
       resolvedTheme,

@@ -6,7 +6,34 @@ import { useSettings } from '../contexts/SettingsContext';
 import useMediaQuery from '../hooks/useMediaQuery';
 import useNow from '../hooks/useNow';
 import { DAYS } from '../utils/constants';
-import { ChevronRightIcon, PlusIcon, CalendarIcon, CheckCircleIcon } from '../icons/SVGIcons';
+import { UpcomingExams } from './ExamsPage';
+import { periodStatus, periodKind, periodLabel, formatRange, periodsOn } from '../utils/academic';
+import { ChevronRightIcon, PlusIcon, CalendarIcon, CheckCircleIcon, GraduationCapIcon } from '../icons/SVGIcons';
+
+/** Şu an süren ya da 2 hafta içinde başlayacak sınav dönemi uyarısı */
+function PeriodBanner({ periods, now, onOpenExams }) {
+  const hit = periods
+    .filter(p => periodKind(p).noClasses)
+    .map(p => ({ p, st: periodStatus(p, now) }))
+    .find(({ st }) => st.state === 'now' || st.state === 'soon');
+  if (!hit) return null;
+  const { p, st } = hit;
+  const tone = st.state === 'now' ? 'danger' : 'warning';
+  return (
+    <div className={`alert alert-${tone}`} role="status" style={{ marginBottom: 'var(--s-5)' }}>
+      <GraduationCapIcon size={18} />
+      <span className="grow">
+        <strong>
+          {st.state === 'now'
+            ? `${periodLabel(p)} sürüyor`
+            : `${periodLabel(p)} ${st.days === 1 ? 'yarın' : `${st.days} gün sonra`} başlıyor`}
+        </strong>
+        {formatRange(p.start, p.end)}{' · '}
+        <button type="button" className="link-btn" onClick={onOpenExams}>Sınavlarını gör</button>
+      </span>
+    </div>
+  );
+}
 
 export function WeekBadge({ onOpenSettings }) {
   const { currentWeek, weeks, semesterStart } = useSettings();
@@ -79,8 +106,9 @@ function UpcomingHomework({ homework, courses, onOpenHomework, onOpenCourse }) {
 }
 
 /** Bugünün dersleri kartı (geniş ekran) */
-function TodayCard({ courses, onCourseClick }) {
+function TodayCard({ courses, onCourseClick, periods = [] }) {
   const now = useNow();
+  const off = periodsOn(periods, now).find(p => periodKind(p).noClasses);
   const tIdx = todayIndex(now);
   const sessions = useMemo(
     () => flattenSessions(courses).filter(s => s.dayIndex === tIdx).sort((a, b) => a.start - b.start),
@@ -104,8 +132,13 @@ function TodayCard({ courses, onCourseClick }) {
         <h2 id="today-title" style={{ fontSize: '1.0625rem' }}>Bugün</h2>
         <span className="subtle text-sm">{sessions.length ? `${sessions.length} ders` : ''}</span>
       </div>
+      {off && (
+        <p className="meta" style={{ marginBottom: 'var(--s-2)' }}>{periodLabel(off)}: normal ders yapılmaz.</p>
+      )}
       {sessions.length ? (
-        <AgendaList sessions={sessions} onCourseClick={onCourseClick} now={now} isToday />
+        <div className={off ? 'is-dimmed' : undefined}>
+          <AgendaList sessions={sessions} onCourseClick={onCourseClick} now={now} isToday={!off} />
+        </div>
       ) : (
         <p className="muted text-sm" style={{ padding: 'var(--s-2) 0' }}>
           Bugün dersin yok.{nextDay ? ` Sıradaki ders günün: ${nextDay}.` : ''}
@@ -116,7 +149,8 @@ function TodayCard({ courses, onCourseClick }) {
 }
 
 /** Program sekmesi */
-export default function SchedulePage({ courses, coursesLoading, homework, onCourseClick, onOpenCourse, onAddCourse, onOpenHomework, onOpenSettings }) {
+export default function SchedulePage({ courses, coursesLoading, homework, exams = [], onCourseClick, onOpenCourse, onAddCourse, onOpenHomework, onOpenExams, onOpenSettings }) {
+  const { periods } = useSettings();
   const wide = useMediaQuery('(min-width: 768px)');
   const now = useNow();
   const dateLabel = now.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -137,17 +171,31 @@ export default function SchedulePage({ courses, coursesLoading, homework, onCour
         </div>
       </header>
 
+      <PeriodBanner periods={periods} now={now} onOpenExams={onOpenExams} />
+
       {wide && hasCourses && (
         <div className="overview-grid">
-          <TodayCard courses={courses} onCourseClick={onCourseClick} />
-          <UpcomingHomework homework={homework} courses={courses} onOpenHomework={onOpenHomework} onOpenCourse={onOpenCourse} />
+          <TodayCard courses={courses} onCourseClick={onCourseClick} periods={periods} />
+          <div className="stack">
+            <UpcomingExams exams={exams} courses={courses} onOpenExams={onOpenExams} />
+            <UpcomingHomework homework={homework} courses={courses} onOpenHomework={onOpenHomework} onOpenCourse={onOpenCourse} />
+          </div>
         </div>
       )}
 
-      <WeeklySchedule courses={courses} loading={coursesLoading} onCourseClick={onCourseClick} onAddCourse={onAddCourse} />
+      <WeeklySchedule
+        courses={courses}
+        loading={coursesLoading}
+        onCourseClick={onCourseClick}
+        onAddCourse={onAddCourse}
+        exams={exams}
+        periods={periods}
+        onOpenExams={onOpenExams}
+      />
 
       {!wide && hasCourses && (
-        <div style={{ marginTop: 'var(--s-6)' }}>
+        <div className="stack" style={{ marginTop: 'var(--s-6)' }}>
+          <UpcomingExams exams={exams} courses={courses} onOpenExams={onOpenExams} />
           <UpcomingHomework homework={homework} courses={courses} onOpenHomework={onOpenHomework} onOpenCourse={onOpenCourse} />
         </div>
       )}

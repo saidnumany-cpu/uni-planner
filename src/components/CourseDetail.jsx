@@ -4,7 +4,8 @@ import HomeworkList from './HomeworkList';
 import AttendanceTracker from './AttendanceTracker';
 import { getSessions, getAbsenceLimit } from '../utils/course';
 import { useSettings } from '../contexts/SettingsContext';
-import { ChevronLeftIcon, EditIcon, ClockIcon, MapPinIcon, UserIcon, BookOpenIcon, ClipboardIcon, CheckCircleIcon } from '../icons/SVGIcons';
+import { teachingWeeks, normalizePeriods } from '../utils/academic';
+import { ChevronLeftIcon, EditIcon, ClockIcon, MapPinIcon, UserIcon, BookOpenIcon, ClipboardIcon, CheckCircleIcon, InboxIcon, RotateCcwIcon } from '../icons/SVGIcons';
 
 const TABS = [
   { id: 'notes', label: 'Notlar', icon: BookOpenIcon },
@@ -13,9 +14,16 @@ const TABS = [
 ];
 
 /** Ders detay sayfası: bilgiler + Notlar / Ödevler / Yoklama sekmeleri */
-export default function CourseDetail({ course, userId, homework, attendance, onSetAttendance, homeworkActions, onBack, backLabel = 'Program', onEdit, initialTab = 'notes' }) {
+export default function CourseDetail({ course, userId, homework, attendance, onSetAttendance, homeworkActions, onBack, backLabel = 'Program', onEdit, onUnarchive, initialTab = 'notes' }) {
   const [tab, setTab] = useState(initialTab);
-  const { weeks, currentWeek } = useSettings();
+  const settings = useSettings();
+  // Arşivlenmiş ders kendi dönem bilgileriyle açılır
+  const archived = !!course.archived;
+  const weeks = archived ? (Number(course.termWeeks) || settings.weeks) : settings.weeks;
+  const currentWeek = archived ? null : settings.currentWeek;
+  const weekList = archived
+    ? (course.termStart ? teachingWeeks(course.termStart, weeks, normalizePeriods(course.termPeriods)) : [])
+    : settings.weekList;
   const sessions = getSessions(course);
   const pending = homework.filter(h => !h.isCompleted).length;
   const stats = attendance?.stats || { attended: 0, missed: 0, percentage: 0 };
@@ -44,6 +52,21 @@ export default function CourseDetail({ course, userId, homework, attendance, onS
           <ChevronLeftIcon size={20} /> {backLabel}
         </button>
       </div>
+
+      {archived && (
+        <div className="alert alert-info" role="status">
+          <InboxIcon size={18} />
+          <span className="grow">
+            <strong>Arşivlenmiş ders · {course.term || 'Geçmiş dönem'}</strong>
+            Notlar, ödevler ve yoklama kayıtları korunuyor. Programda ve sınavlarda görünmez.
+          </span>
+          {onUnarchive && (
+            <button type="button" className="btn btn-sm" onClick={() => onUnarchive(course)}>
+              <RotateCcwIcon size={16} /> Arşivden çıkar
+            </button>
+          )}
+        </div>
+      )}
 
       <section className="card course-hero" style={{ '--c': course.color || 'var(--primary)' }}>
         <div className="row-between" style={{ alignItems: 'flex-start' }}>
@@ -111,7 +134,8 @@ export default function CourseDetail({ course, userId, homework, attendance, onS
             stats={stats}
             weeks={weeks}
             currentWeek={currentWeek}
-            onSet={(week, attended, note) => onSetAttendance(course.id, week, attended, note)}
+            weekList={weekList}
+            onSet={(week, status, note) => onSetAttendance(course.id, week, status, note)}
           />
         )}
       </div>
