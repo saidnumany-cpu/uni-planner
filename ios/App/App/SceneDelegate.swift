@@ -37,8 +37,6 @@ class MainViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
-        // Alt menü: iOS'un gerçek Liquid Glass'ı ile çizilen native sekme çubuğu (NativeTabBar.swift)
-        bridge?.registerPluginInstance(NativeTabBarPlugin())
         view.backgroundColor = Self.appBackground
         guard let webView = webView else { return }
         webView.isOpaque = false
