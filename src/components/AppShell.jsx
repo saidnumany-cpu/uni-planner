@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from './Avatar';
+import useNativeTabBar from '../native/useNativeTabBar';
 import { CalendarIcon, ClipboardIcon, ChartIcon, SettingsIcon, GraduationCapIcon, ExamIcon } from '../icons/SVGIcons';
 
 export const NAV_ITEMS = [
@@ -24,6 +25,8 @@ function Brand() {
  */
 export default function AppShell({ activeTab, onTabChange, onOpenSettings, badges = {}, children }) {
   const { user } = useAuth();
+  // iPhone uygulamasında alt menüyü iOS'un kendi Liquid Glass sekme çubuğu çizer
+  const nativeTabBar = useNativeTabBar({ activeTab, badges, onTabChange });
   const activeIndex = Math.max(0, NAV_ITEMS.findIndex(item => item.id === activeTab));
 
   // Sekme değişince mercek esneyip toparlansın (Liquid Glass hissi)
@@ -88,7 +91,7 @@ export default function AppShell({ activeTab, onTabChange, onOpenSettings, badge
         <main className="main" id="main">{children}</main>
       </div>
 
-      <nav
+      {!nativeTabBar && <nav
         className="bottom-nav"
         aria-label="Ana menü"
         style={{ '--n': NAV_ITEMS.length, '--i': activeIndex }}
@@ -128,7 +131,7 @@ export default function AppShell({ activeTab, onTabChange, onOpenSettings, badge
             </button>
           );
         })}
-      </nav>
+      </nav>}
     </div>
   );
 }

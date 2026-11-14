@@ -2228,3 +2228,9 @@ button.card:active { background: var(--surface-2); }
   .bottom-nav-lens.is-moving { animation: none; }
   .bottom-nav-item:active { transform: none; }
 }
+
+/* iPhone uygulaması: alt menüyü iOS'un sistem sekme çubuğu çiziyor.
+   Güvenli alanın alt boşluğu çubuğun yüksekliğini zaten içeriyor. */
+.native-tabbar {
+  --nav-space: env(safe-area-inset-bottom);
+}

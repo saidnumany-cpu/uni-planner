@@ -8,7 +8,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = MainViewController()
+        window?.rootViewController = UniTabBarController()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
@@ -29,7 +29,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 /// - iOS 26'nın kaydırma kenarı efekti (üstteki bulanık/beyaz sis) kapatılır;
 ///   üst çubuğun cam görünümünü web tarafı kendisi çiziyor.
 class MainViewController: CAPBridgeViewController {
-    private static let appBackground = UIColor { traits in
+    static let appBackground = UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 11 / 255, green: 15 / 255, blue: 23 / 255, alpha: 1)
             : UIColor(red: 246 / 255, green: 247 / 255, blue: 251 / 255, alpha: 1)
@@ -37,6 +37,8 @@ class MainViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
+        // iOS'un kendi Liquid Glass sekme çubuğu (NativeTabBar.swift)
+        bridge?.registerPluginInstance(NativeTabBarPlugin())
         view.backgroundColor = Self.appBackground
         guard let webView = webView else { return }
         webView.isOpaque = false
