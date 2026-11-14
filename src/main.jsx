@@ -4,6 +4,9 @@ import App from './App.jsx'
 import './index.css'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { initLiquidGlass } from './utils/liquidGlass.js'
+
+initLiquidGlass()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

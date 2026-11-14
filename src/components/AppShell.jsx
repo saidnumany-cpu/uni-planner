@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from './Avatar';
 import { CalendarIcon, ClipboardIcon, ChartIcon, SettingsIcon, GraduationCapIcon, ExamIcon } from '../icons/SVGIcons';
@@ -23,6 +24,20 @@ function Brand() {
  */
 export default function AppShell({ activeTab, onTabChange, onOpenSettings, badges = {}, children }) {
   const { user } = useAuth();
+  const activeIndex = Math.max(0, NAV_ITEMS.findIndex(item => item.id === activeTab));
+
+  // Sekme değişince mercek esneyip toparlansın (Liquid Glass hissi)
+  const lensRef = useRef(null);
+  const prevIndex = useRef(activeIndex);
+  useEffect(() => {
+    if (prevIndex.current === activeIndex) return;
+    prevIndex.current = activeIndex;
+    const lens = lensRef.current;
+    if (!lens) return;
+    lens.classList.remove('is-moving');
+    void lens.offsetWidth; // animasyonu yeniden başlat
+    lens.classList.add('is-moving');
+  }, [activeIndex]);
 
   return (
     <div className="app">
@@ -76,9 +91,24 @@ export default function AppShell({ activeTab, onTabChange, onOpenSettings, badge
       <nav
         className="bottom-nav"
         aria-label="Ana menü"
-        style={{ '--n': NAV_ITEMS.length, '--i': Math.max(0, NAV_ITEMS.findIndex(item => item.id === activeTab)) }}
+        style={{ '--n': NAV_ITEMS.length, '--i': activeIndex }}
       >
-        <span className="bottom-nav-lens" aria-hidden="true" />
+        <span className="bottom-nav-lens" aria-hidden="true" ref={lensRef} onAnimationEnd={(e) => e.currentTarget.classList.remove('is-moving')}>
+          <span className="bottom-nav-lens-track">
+            {NAV_ITEMS.map(item => {
+              const Icon = item.icon;
+              return (
+                <span key={item.id}>
+                  <span className="nav-icon-wrap">
+                    <Icon size={22} />
+                    {badges[item.id] ? <span className="nav-badge">{badges[item.id]}</span> : null}
+                  </span>
+                  {item.label}
+                </span>
+              );
+            })}
+          </span>
+        </span>
         {NAV_ITEMS.map(item => {
           const Icon = item.icon;
           return (
@@ -93,7 +123,7 @@ export default function AppShell({ activeTab, onTabChange, onOpenSettings, badge
                 <Icon size={22} />
                 {badges[item.id] ? <span className="nav-badge" aria-hidden="true">{badges[item.id]}</span> : null}
               </span>
-              {item.label}
+              <span>{item.label}</span>
               {badges[item.id] ? <span className="sr-only">, {badges[item.id]} acil</span> : null}
             </button>
           );

@@ -88,6 +88,11 @@
   --glass-lens: rgba(255, 255, 255, 0.7);
   --glass-shadow: 0 10px 30px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
   --glass-blur: blur(22px) saturate(185%);
+  --glass-clear: rgba(255, 255, 255, 0.3);
+  --glass-rim:
+    inset 1.5px 1.5px 1px -1px rgba(255, 255, 255, 0.95),
+    inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, 0.55),
+    inset 0 0 14px rgba(255, 255, 255, 0.28);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   --nav-gap: max(var(--s-3), calc(env(safe-area-inset-bottom) - var(--s-2)));
   --nav-space: calc(var(--bottomnav-h) + var(--nav-gap));
@@ -139,8 +144,13 @@
   --glass-edge: rgba(0, 0, 0, 0.4);
   --glass-highlight: rgba(255, 255, 255, 0.22);
   --glass-shine: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 45%);
-  --glass-lens: rgba(255, 255, 255, 0.14);
+  --glass-lens: rgba(255, 255, 255, 0.2);
   --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --glass-clear: rgba(28, 34, 48, 0.3);
+  --glass-rim:
+    inset 1.5px 1.5px 1px -1px rgba(255, 255, 255, 0.5),
+    inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, 0.2),
+    inset 0 0 14px rgba(255, 255, 255, 0.06);
 }
 
 /* ==========================================================================
@@ -317,8 +327,54 @@ img { max-width: 100%; display: block; }
     0 2px 10px rgba(15, 23, 42, 0.08);
   transform: translateX(calc(var(--i) * 100%));
   transition: transform 420ms var(--ease-spring);
-  z-index: -1;
+  z-index: 1;
   pointer-events: none;
+  overflow: hidden;
+  /* Mercek altındaki asıl simgeyi hafifçe bulanıklaştırır; üstünde büyütülmüş kopyası durur */
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  backdrop-filter: blur(10px) saturate(160%);
+}
+
+/* Merceğin içinden görünen büyütülmüş sekmeler: mercekle birlikte ters yönde kayar, hizalı kalır */
+.bottom-nav-lens-track {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--n) * 100%);
+  display: flex;
+  transform: translateX(calc(var(--i) * -100% / var(--n)));
+  transition: transform 420ms var(--ease-spring);
+}
+.bottom-nav-lens-track > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--primary-text);
+  transform: scale(1.12);
+}
+.bottom-nav-lens-track .nav-icon-wrap {
+  display: grid;
+  place-items: center;
+  height: 26px;
+}
+
+/* Seçili sekmenin asıl içeriği merceğin altında gizlenir (yerine büyütülmüş kopyası görünür);
+   gecikme, mercek oraya varana kadar boşluk kalmasın diye */
+.bottom-nav-item > * { transition: opacity 120ms var(--ease); }
+.bottom-nav-item[aria-current='page'] > * { opacity: 0; transition-delay: 220ms; }
+
+/* Sekme değişince mercek esneyip toparlanır */
+.bottom-nav-lens.is-moving { animation: lens-squish 420ms var(--ease-out, ease-out); }
+@keyframes lens-squish {
+  35% { scale: 1.14 0.86; }
+  70% { scale: 0.97 1.04; }
+  100% { scale: 1 1; }
 }
 
 .bottom-nav-item {
@@ -2111,10 +2167,23 @@ button.card:active { background: var(--surface-2); }
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    var(--glass-rim),
     0 0 0 0.5px var(--glass-edge),
     var(--glass-shadow);
+}
+
+/* Gerçek kırılma (Chromium): arkadaki içerik cam kenarlarında bükülür, renkler hafifçe ayrışır.
+   Harita ve filtre src/utils/liquidGlass.js'te her yüzeyin ölçüsüne göre üretilir. */
+.lg-refraction .lg-refract {
+  -webkit-backdrop-filter: var(--lg-refract) blur(var(--lg-frost, 2px)) saturate(180%) brightness(1.04);
+  backdrop-filter: var(--lg-refract) blur(var(--lg-frost, 2px)) saturate(180%) brightness(1.04);
+}
+.lg-refraction .bottom-nav.lg-refract {
+  --lg-frost: 2.5px;
+  background: var(--glass-clear);
+}
+.lg-refraction .modal.lg-refract {
+  --lg-frost: 16px;
 }
 
 /* Formların okunabilir kalması için modal camı daha yoğun */
@@ -2155,6 +2224,7 @@ button.card:active { background: var(--surface-2); }
   .bottom-nav::after, .modal::after { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bottom-nav-lens { transition: none; }
+  .bottom-nav-lens, .bottom-nav-lens-track { transition: none; }
+  .bottom-nav-lens.is-moving { animation: none; }
   .bottom-nav-item:active { transform: none; }
 }
