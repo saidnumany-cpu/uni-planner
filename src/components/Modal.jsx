@@ -38,8 +38,6 @@ export default function Modal({
     if (stack.length === 1) {
       savedOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-      // iOS'taki native sekme çubuğu bunu izleyip modal açıkken gizlenir
-      document.documentElement.setAttribute('data-modal-open', '');
     }
     const previouslyFocused = document.activeElement;
 
@@ -74,10 +72,7 @@ export default function Modal({
       window.removeEventListener('keydown', onKey);
       const i = stack.indexOf(token);
       if (i !== -1) stack.splice(i, 1);
-      if (stack.length === 0) {
-        document.body.style.overflow = savedOverflow;
-        document.documentElement.removeAttribute('data-modal-open');
-      }
+      if (stack.length === 0) document.body.style.overflow = savedOverflow;
       if (previouslyFocused && typeof previouslyFocused.focus === 'function' && document.contains(previouslyFocused)) {
         previouslyFocused.focus({ preventScroll: true });
       }
