@@ -1,12 +1,14 @@
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from './Avatar';
+import useNativeTabBar from '../native/useNativeTabBar';
 import { CalendarIcon, ClipboardIcon, ChartIcon, SettingsIcon, GraduationCapIcon, ExamIcon } from '../icons/SVGIcons';
 
 export const NAV_ITEMS = [
-  { id: 'schedule', label: 'Program', icon: CalendarIcon },
-  { id: 'exams', label: 'Sınavlar', icon: ExamIcon },
-  { id: 'homework', label: 'Ödevler', icon: ClipboardIcon },
-  { id: 'stats', label: 'Özet', icon: ChartIcon }
+  // sf: iOS'taki native sekme çubuğunda kullanılan SF Symbol adı
+  { id: 'schedule', label: 'Program', icon: CalendarIcon, sf: 'calendar' },
+  { id: 'exams', label: 'Sınavlar', icon: ExamIcon, sf: 'pencil.and.list.clipboard' },
+  { id: 'homework', label: 'Ödevler', icon: ClipboardIcon, sf: 'checklist' },
+  { id: 'stats', label: 'Özet', icon: ChartIcon, sf: 'chart.bar.fill' }
 ];
 
 function Brand() {
@@ -23,6 +25,7 @@ function Brand() {
  */
 export default function AppShell({ activeTab, onTabChange, onOpenSettings, badges = {}, children }) {
   const { user } = useAuth();
+  const nativeTabBar = useNativeTabBar({ items: NAV_ITEMS, activeTab, badges, onTabChange });
 
   return (
     <div className="app">
@@ -73,7 +76,7 @@ export default function AppShell({ activeTab, onTabChange, onOpenSettings, badge
         <main className="main" id="main">{children}</main>
       </div>
 
-      <nav
+      {!nativeTabBar && <nav
         className="bottom-nav"
         aria-label="Ana menü"
         style={{ '--n': NAV_ITEMS.length, '--i': Math.max(0, NAV_ITEMS.findIndex(item => item.id === activeTab)) }}
@@ -98,7 +101,7 @@ export default function AppShell({ activeTab, onTabChange, onOpenSettings, badge
             </button>
           );
         })}
-      </nav>
+      </nav>}
     </div>
   );
 }
